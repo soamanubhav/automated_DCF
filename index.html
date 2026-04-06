@@ -6,54 +6,360 @@
   <title>Company Data Fetcher</title>
 
   <style>
+    :root {
+      --bg: #0b1220;
+      --card: #121b2d;
+      --card-alt: #1a2438;
+      --line: #2a3856;
+      --text: #e7edf8;
+      --muted: #9fb0d1;
+      --accent: #5ea1ff;
+      --accent-strong: #357ef2;
+      --danger-text: #ffb4b4;
+      --danger-bg: rgba(255, 86, 86, 0.18);
+      --ok-bg: rgba(94, 161, 255, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial;
-      background: #f6f7fb;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, Arial, sans-serif;
+      background: radial-gradient(circle at top, #18253f 0%, var(--bg) 52%);
+      color: var(--text);
+      padding: 24px;
+    }
+
+    .page {
+      width: min(1280px, 100%);
+      margin: 0 auto;
     }
 
     .card {
-      background: white;
+      background: linear-gradient(180deg, #121b2d 0%, #0f1727 100%);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 18px 35px rgba(0, 0, 0, 0.35);
       padding: 20px;
-      border-radius: 10px;
-      width: 400px;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+
+    .title {
+      margin: 0 0 4px 0;
+      font-size: 22px;
+      letter-spacing: 0.2px;
+    }
+
+    .subtitle {
+      margin: 0 0 16px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-bottom: 14px;
     }
 
     input, button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 11px 12px;
+      font-size: 14px;
     }
 
-    pre {
-      margin-top: 15px;
-      max-height: 300px;
-      overflow: auto;
-      background: #eee;
-      padding: 10px;
+    input {
+      background: #0d1629;
+      color: var(--text);
+    }
+
+    button {
+      background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      min-width: 120px;
+    }
+
+    button:hover {
+      filter: brightness(1.06);
+    }
+
+    .query-chip {
+      display: none;
+      width: fit-content;
+      margin: 8px 0 14px;
       font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #2a426f;
+      background: var(--ok-bg);
+      color: #bcd6ff;
+    }
+
+    .tabs {
+      display: none;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      border: 1px solid #33486f;
+      background: #17233b;
+      color: #c8d8f6;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(180deg, #5ea1ff, #357ef2);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .output {
+      max-height: 62vh;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #111a2c;
+      font-size: 12px;
+    }
+
+    .statement {
+      display: none;
+      padding: 12px;
+    }
+
+    .statement.active {
+      display: block;
+    }
+
+    .statement-head {
+      margin: 0 0 10px;
+      color: #dce7ff;
+      font-size: 14px;
+      text-transform: capitalize;
+      letter-spacing: 0.2px;
+    }
+
+    .error {
+      margin: 12px;
+      color: var(--danger-text);
+      background: var(--danger-bg);
+      border: 1px solid #a73535;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      min-width: 760px;
+    }
+
+    th, td {
+      border: 1px solid #253757;
+      padding: 8px;
+      white-space: nowrap;
+      text-align: right;
+      color: #dbe6fb;
+    }
+
+    thead th {
+      background: #182743;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      font-weight: 700;
+    }
+
+    th:first-child, td:first-child {
+      text-align: left;
+      font-weight: 600;
+      background: #142138;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #101c30;
+    }
+
+    .empty-state {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 14px;
     }
   </style>
 </head>
 
 <body>
-  <div class="card">
-    <h3>Financial Data Fetcher</h3>
+  <div class="page">
+    <div class="card">
+      <h3 class="title">Financial Data Fetcher</h3>
+      <p class="subtitle">Fetch and explore Income Statement, Balance Sheet, and Cash Flow in separate tabs.</p>
 
-    <input id="ticker" placeholder="RELIANCE.NS / AAPL" />
-    <button id="fetch-btn">Fetch Data</button>
+      <div class="controls">
+        <input id="ticker" placeholder="Try RELIANCE.NS / AAPL / MSFT" />
+        <button id="fetch-btn">Fetch Data</button>
+      </div>
 
-    <pre id="output"></pre>
+      <div id="query-chip" class="query-chip"></div>
+      <div id="tabs" class="tabs"></div>
+      <div id="output" class="output">
+        <div class="empty-state">Enter a ticker and click <strong>Fetch Data</strong> to view statements.</div>
+      </div>
+    </div>
   </div>
 
   <script>
     const btn = document.getElementById("fetch-btn");
     const input = document.getElementById("ticker");
     const output = document.getElementById("output");
+    const tabs = document.getElementById("tabs");
+    const queryChip = document.getElementById("query-chip");
+
+    function formatValue(value) {
+      if (value === null || value === undefined) return "-";
+      if (typeof value === "number") return value.toLocaleString();
+      return String(value);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function normalizeLabel(rawKey) {
+      return rawKey.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+
+    function sortColumns(columns) {
+      return columns.sort((left, right) => {
+        const leftDate = Date.parse(left);
+        const rightDate = Date.parse(right);
+        const leftIsDate = !Number.isNaN(leftDate);
+        const rightIsDate = !Number.isNaN(rightDate);
+
+        if (leftIsDate && rightIsDate) return rightDate - leftDate;
+        if (left === "TTM") return -1;
+        if (right === "TTM") return 1;
+        return left.localeCompare(right);
+      });
+    }
+
+    function renderStatementTable(key, statementData) {
+      const rows = Object.keys(statementData || {});
+      if (!rows.length) {
+        return `
+          <section class="statement" data-tab="${escapeHtml(key)}">
+            <h4 class="statement-head">${escapeHtml(normalizeLabel(key))}</h4>
+            <div class="empty-state">No data found for this statement.</div>
+          </section>
+        `;
+      }
+
+      const columnSet = new Set();
+      for (const rowName of rows) {
+        const row = statementData[rowName] || {};
+        Object.keys(row).forEach((col) => columnSet.add(col));
+      }
+      const columns = sortColumns(Array.from(columnSet));
+
+      const headerCells = [`<th>Metric</th>`]
+        .concat(columns.map((col) => `<th>${escapeHtml(col)}</th>`))
+        .join("");
+
+      const bodyRows = rows
+        .map((rowName) => {
+          const row = statementData[rowName] || {};
+          const dataCells = columns
+            .map((col) => `<td>${escapeHtml(formatValue(row[col]))}</td>`)
+            .join("");
+          return `<tr><td>${escapeHtml(rowName)}</td>${dataCells}</tr>`;
+        })
+        .join("");
+
+      return `
+        <section class="statement" data-tab="${escapeHtml(key)}">
+          <h4 class="statement-head">${escapeHtml(normalizeLabel(key))}</h4>
+          <table>
+            <thead><tr>${headerCells}</tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+        </section>
+      `;
+    }
+
+    function activateTab(tabName) {
+      document.querySelectorAll(".tab-btn").forEach((tabButton) => {
+        tabButton.classList.toggle("active", tabButton.dataset.tab === tabName);
+      });
+
+      document.querySelectorAll(".statement").forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.tab === tabName);
+      });
+    }
+
+    function renderTabs(sectionKeys) {
+      tabs.innerHTML = sectionKeys
+        .map((key) => `<button class="tab-btn" data-tab="${escapeHtml(key)}">${escapeHtml(normalizeLabel(key))}</button>`)
+        .join("");
+
+      tabs.style.display = sectionKeys.length ? "flex" : "none";
+
+      tabs.querySelectorAll(".tab-btn").forEach((tabButton) => {
+        tabButton.addEventListener("click", () => activateTab(tabButton.dataset.tab));
+      });
+    }
+
+    function renderFinancialTables(data) {
+      const sections = [
+        ["balance_sheet", data.balance_sheet],
+        ["income_statement", data.income_statement],
+        ["cash_flow_statement", data.cash_flow_statement],
+      ];
+
+      const allEmpty = sections.every(([, value]) => !Object.keys(value || {}).length);
+      if (allEmpty) {
+        tabs.style.display = "none";
+        output.innerHTML = `<div class="error">No tabular financial data returned.</div>`;
+        return;
+      }
+
+      const sectionKeys = sections.map(([key]) => key);
+      const tablesHtml = sections
+        .map(([key, value]) => renderStatementTable(key, value))
+        .join("");
+
+      output.innerHTML = tablesHtml;
+      renderTabs(sectionKeys);
+
+      // Start with Balance Sheet tab to directly address visibility concern.
+      activateTab("balance_sheet");
+    }
+
+    function resetResults() {
+      tabs.style.display = "none";
+      tabs.innerHTML = "";
+      output.innerHTML = `<div class="empty-state">Loading...</div>`;
+    }
 
     btn.addEventListener("click", async () => {
       const query = input.value.trim();
@@ -63,7 +369,8 @@
         return;
       }
 
-      output.textContent = "Loading...";
+      resetResults();
+      queryChip.style.display = "none";
 
       try {
         const res = await fetch(
@@ -73,13 +380,17 @@
         const data = await res.json();
 
         if (data.error) {
-          output.textContent = "❌ " + data.error;
+          output.innerHTML = `<div class="error">❌ ${data.error}</div>`;
+          tabs.style.display = "none";
         } else {
-          output.textContent = JSON.stringify(data, null, 2);
+          queryChip.textContent = `Showing data for: ${query}`;
+          queryChip.style.display = "inline-flex";
+          renderFinancialTables(data);
         }
 
       } catch (err) {
-        output.textContent = "❌ Cannot reach backend";
+        output.innerHTML = `<div class="error">❌ Cannot reach backend</div>`;
+        tabs.style.display = "none";
         console.error(err);
       }
     });
