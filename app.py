@@ -27,6 +27,18 @@ FORECAST_YEARS = 5
 CACHE_TTL_DAYS = 5
 SUPABASE_TTL_DAYS = 60
 YFINANCE_RETRY_DELAYS = [2, 4, 6]
+DEFAULT_PROXY_LIST = [
+    "http://cunkpcet:6hjr3wvrwsg1@31.59.20.176:6754",
+    "http://cunkpcet:6hjr3wvrwsg1@23.95.150.145:6114",
+    "http://cunkpcet:6hjr3wvrwsg1@198.23.239.134:6540",
+    "http://cunkpcet:6hjr3wvrwsg1@45.38.107.97:6014",
+    "http://cunkpcet:6hjr3wvrwsg1@107.172.163.27:6543",
+    "http://cunkpcet:6hjr3wvrwsg1@198.105.121.200:6462",
+    "http://cunkpcet:6hjr3wvrwsg1@216.10.27.159:6837",
+    "http://cunkpcet:6hjr3wvrwsg1@142.111.67.146:5611",
+    "http://cunkpcet:6hjr3wvrwsg1@191.96.254.138:6185",
+    "http://cunkpcet:6hjr3wvrwsg1@31.58.9.4:6077",
+]
 COMPANY_CACHE: dict[str, dict[str, Any]] = {}
 
 
@@ -57,17 +69,19 @@ def _get_supabase_client() -> Client | None:
 def _parse_proxy_list() -> list[str]:
     raw = (os.environ.get("PROXY_LIST") or "").strip()
     if not raw:
-        return []
+        return DEFAULT_PROXY_LIST.copy()
+
+    normalized = raw.replace("\\\n", ",").replace("\n", ",")
 
     try:
-        loaded = json.loads(raw)
+        loaded = json.loads(normalized)
         if isinstance(loaded, list):
             return [str(item).strip() for item in loaded if str(item).strip()]
     except json.JSONDecodeError:
         pass
 
-    cleaned = raw.strip("[]")
-    items = [item.strip().strip("\"'") for item in cleaned.split(",")]
+    cleaned = normalized.strip("[]")
+    items = [item.strip().strip("\"'").strip("\\") for item in cleaned.split(",")]
     return [item for item in items if item]
 
 
