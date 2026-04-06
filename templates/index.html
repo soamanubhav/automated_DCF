@@ -25,6 +25,12 @@
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
       }
 
+      .note {
+        margin-top: 0;
+        color: #475467;
+        font-size: 0.9rem;
+      }
+
       .controls {
         display: grid;
         grid-template-columns: 1fr auto;
@@ -85,21 +91,26 @@
   </head>
   <body>
     <main class="card">
+      <p class="note">
+        Run the Python server first, then open this app at
+        <code>http://127.0.0.1:5000</code>.
+      </p>
       <label for="company-input">Company Name / Ticker</label>
-      <div class="controls">
+      <form id="fetch-form" class="controls">
         <input
           id="company-input"
           type="text"
           placeholder="e.g., Apple or AAPL"
           aria-label="Company Name or Ticker"
         />
-        <button id="fetch-btn" type="button">Fetch Data</button>
-      </div>
+        <button id="fetch-btn" type="submit">Fetch Data</button>
+      </form>
       <p id="status" class="status"></p>
       <pre id="output" hidden></pre>
     </main>
 
     <script>
+      const form = document.getElementById('fetch-form');
       const input = document.getElementById('company-input');
       const btn = document.getElementById('fetch-btn');
       const status = document.getElementById('status');
@@ -110,7 +121,9 @@
         status.style.color = isError ? '#b42318' : '#344054';
       };
 
-      btn.addEventListener('click', async () => {
+      async function fetchData(event) {
+        event.preventDefault();
+
         const query = input.value.trim();
 
         if (!query) {
@@ -140,12 +153,29 @@
           output.hidden = false;
           setStatus('Data fetched successfully.');
         } catch (err) {
-          setStatus(`Failed to fetch data: ${err.message}`, true);
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes('Failed to fetch')) {
+            setStatus(
+              'Cannot reach backend. Start Flask and open http://127.0.0.1:5000.',
+              true
+            );
+          } else {
+            setStatus(`Failed to fetch data: ${message}`, true);
+          }
           output.hidden = true;
         } finally {
           btn.disabled = false;
         }
-      });
+      }
+
+      form.addEventListener('submit', fetchData);
+
+      if (window.location.protocol === 'file:') {
+        setStatus(
+          'This page must be opened from Flask at http://127.0.0.1:5000 (not as a local file).',
+          true
+        );
+      }
     </script>
   </body>
 </html>
