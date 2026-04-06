@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Financial Analysis & DCF Valuation Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="logo-wrap">
+          <div class="logo-icon">📈</div>
+        </div>
+
+        <div class="input-group">
+          <label>Company Ticker</label>
+          <input type="text" value="RELIANCE.NS" />
+        </div>
+
+        <div class="slider-group">
+          <label>Revenue Growth (%): <span>8.0</span></label>
+          <input type="range" min="0" max="30" value="8" />
+        </div>
+
+        <div class="slider-group">
+          <label>EBIT Margin (%): <span>15.0</span></label>
+          <input type="range" min="0" max="40" value="15" />
+        </div>
+
+        <div class="slider-group">
+          <label>Depreciation/Rev (%): <span>5.0</span></label>
+          <input type="range" min="0" max="20" value="5" />
+        </div>
+
+        <div class="slider-group">
+          <label>NWC/Rev (%): <span>3.0</span></label>
+          <input type="range" min="0" max="20" value="3" />
+        </div>
+
+        <div class="slider-group">
+          <label>Debt/Rev (%): <span>20.0</span></label>
+          <input type="range" min="0" max="50" value="20" />
+        </div>
+
+        <div class="slider-group">
+          <label>Capex/Rev (%): <span>8.0</span></label>
+          <input type="range" min="0" max="25" value="8" />
+        </div>
+
+        <div class="slider-group">
+          <label>WACC (%): <span>10.0</span></label>
+          <input type="range" min="1" max="25" value="10" />
+        </div>
+
+        <div class="slider-group">
+          <label>Terminal Growth (%): <span>3.0</span></label>
+          <input type="range" min="0" max="10" value="3" />
+        </div>
+
+        <div class="slider-group">
+          <label>Tax Rate (%): <span>25.0</span></label>
+          <input type="range" min="0" max="40" value="25" />
+        </div>
+
+        <button class="primary-btn">Get Data</button>
+      </aside>
+
+      <main class="content">
+        <header>
+          <h1>Financial Analysis &amp; DCF Valuation Tool</h1>
+        </header>
+
+        <section class="card">
+          <div class="tabs">
+            <button class="tab active">Income Statement</button>
+            <button class="tab">Balance Sheet</button>
+            <button class="tab">Cash Flow Statement</button>
+          </div>
+
+          <div class="tables-grid">
+            <div>
+              <h2>Income Statement</h2>
+              <table>
+                <thead>
+                  <tr><th></th><th>2021</th><th>2022</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Revenue</td><td>₹ 5,350</td><td>₹ 5,050</td></tr>
+                  <tr><td>EBIT</td><td>₹ 2,920</td><td>₹ 2,280</td></tr>
+                  <tr><td>Net Income</td><td>₹ 1,000</td><td>₹ 1,000</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h2>Balance Sheet</h2>
+              <table>
+                <thead>
+                  <tr><th></th><th>2021</th><th>2022</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Total Assets</td><td>₹ 5,200</td><td>₹ 6,350</td></tr>
+                  <tr><td>Total Liabilities</td><td>₹ 2,200</td><td>₹ 2,200</td></tr>
+                  <tr><td>Equity</td><td>₹ 3,100</td><td>₹ 2,100</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h2>Cash Flow Statement</h2>
+              <table>
+                <thead>
+                  <tr><th></th><th>2021</th><th>2023</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Operating Cash Flow</td><td>₹ 2,360</td><td>₹ 2,700</td></tr>
+                  <tr><td>Investing Cash Flow</td><td>₹ 1,450</td><td>₹ 1,850</td></tr>
+                  <tr><td>Financing Cash Flow</td><td>₹ 1,950</td><td>₹ 1,350</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>DCF Valuation</h2>
+          <div class="metrics">
+            <div class="metric-box"><h3>Present Value:</h3><p>₹ 650,000 Cr</p></div>
+            <div class="metric-box"><h3>Equity Value:</h3><p>₹ 480,000 Cr</p></div>
+            <div class="metric-box"><h3>Value Per Share:</h3><p>₹ 750</p></div>
+          </div>
+        </section>
+
+        <section class="chart-grid">
+          <div class="card">
+            <h2>Revenue Projection</h2>
+            <canvas id="revenueChart"></canvas>
+          </div>
+          <div class="card">
+            <h2>FCFF Projection</h2>
+            <canvas id="fcffChart"></canvas>
+          </div>
+          <div class="card">
+            <h2>Sensitivity Analysis</h2>
+            <h3>WACC vs Terminal Growth</h3>
+            <div class="heatmap">
+              <div class="cell green">1550</div><div class="cell green">1800</div><div class="cell orange">1790</div><div class="cell red">2300</div>
+              <div class="cell green">2130</div><div class="cell green">1600</div><div class="cell orange">1500</div><div class="cell red">1550</div>
+              <div class="cell green">2370</div><div class="cell green">1500</div><div class="cell orange">1500</div><div class="cell red">1500</div>
+              <div class="cell green">1300</div><div class="cell green">1500</div><div class="cell orange">1350</div><div class="cell red">1250</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
