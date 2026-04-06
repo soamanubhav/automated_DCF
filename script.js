@@ -8,6 +8,13 @@ const chartsEl = document.getElementById("charts");
 const forecastEl = document.getElementById("forecast");
 const sensitivityEl = document.getElementById("sensitivity");
 const statementsEl = document.getElementById("statements");
+const API_BASE = window.location.hostname.includes("github.io")
+  ? "https://automated-dcf.onrender.com"
+  : "";
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`;
+}
 
 const ASSUMPTION_FIELDS = [
   "revenue_growth_rate",
@@ -326,7 +333,7 @@ runBtn.addEventListener("click", async () => {
   resetPanels();
 
   try {
-    const res = await fetch("/dcf", {
+    const res = await fetch(apiUrl("/dcf"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, assumptions: collectAssumptions() }),
