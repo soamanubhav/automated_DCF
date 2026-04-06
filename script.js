@@ -5,10 +5,116 @@ const tabs = document.getElementById("tabs");
 const queryChip = document.getElementById("query-chip");
 
 const SECTIONS = [
-  ["income_statement", "Income Statement"],
   ["balance_sheet", "Balance Sheet"],
+  ["income_statement", "Income Statement"],
   ["cash_flow_statement", "Cash Flow"],
 ];
+
+const ROW_ORDER = {
+  balance_sheet: [
+    "Total Assets",
+    "Current Assets",
+    "Cash And Cash Equivalents",
+    "Cash Cash Equivalents And Short Term Investments",
+    "Other Short Term Investments",
+    "Net Receivables",
+    "Inventory",
+    "Other Current Assets",
+    "Total Non Current Assets",
+    "Property Plant Equipment",
+    "Gross PPE",
+    "Accumulated Depreciation",
+    "Goodwill",
+    "Intangible Assets",
+    "Investments And Advances",
+    "Other Non Current Assets",
+    "Total Liabilities Net Minority Interest",
+    "Current Liabilities",
+    "Payables",
+    "Current Debt",
+    "Current Deferred Liabilities",
+    "Other Current Liabilities",
+    "Total Non Current Liabilities Net Minority Interest",
+    "Long Term Debt",
+    "Long Term Debt And Capital Lease Obligation",
+    "Non Current Deferred Liabilities",
+    "Other Non Current Liabilities",
+    "Stockholders Equity",
+    "Total Equity Gross Minority Interest",
+    "Common Stock Equity",
+    "Retained Earnings",
+    "Gains Losses Not Affecting Retained Earnings",
+    "Other Equity Adjustments",
+    "Total Capitalization",
+    "Working Capital",
+    "Net Tangible Assets",
+    "Invested Capital",
+    "Tangible Book Value",
+  ],
+  income_statement: [
+    "Total Revenue",
+    "Operating Revenue",
+    "Cost Of Revenue",
+    "Gross Profit",
+    "Operating Expense",
+    "Research And Development",
+    "Selling General And Administration",
+    "General And Administrative Expense",
+    "Selling And Marketing Expense",
+    "Operating Income",
+    "Operating Margin",
+    "EBIT",
+    "EBITDA",
+    "Interest Income",
+    "Interest Expense",
+    "Pretax Income",
+    "Tax Provision",
+    "Net Income",
+    "Net Income Common Stockholders",
+    "Diluted NI Availto Com Stockholders",
+    "Basic EPS",
+    "Diluted EPS",
+    "Basic Average Shares",
+    "Diluted Average Shares",
+    "Normalized Income",
+  ],
+  cash_flow_statement: [
+    "Operating Cash Flow",
+    "Cash Flow From Continuing Operating Activities",
+    "Net Income From Continuing Operations",
+    "Depreciation And Amortization",
+    "Deferred Tax",
+    "Stock Based Compensation",
+    "Change In Working Capital",
+    "Changes In Receivables",
+    "Changes In Inventory",
+    "Changes In Payables And Accrued Expense",
+    "Other Non Cash Items",
+    "Investing Cash Flow",
+    "Cash Flow From Continuing Investing Activities",
+    "Capital Expenditure",
+    "Purchase Of PPE",
+    "Sale Of PPE",
+    "Net Business Purchase And Sale",
+    "Purchase Of Investment",
+    "Sale Of Investment",
+    "Financing Cash Flow",
+    "Cash Flow From Continuing Financing Activities",
+    "Net Long Term Debt Issuance",
+    "Long Term Debt Issuance",
+    "Long Term Debt Payments",
+    "Cash Dividends Paid",
+    "Common Stock Issuance",
+    "Common Stock Payments",
+    "Repurchase Of Capital Stock",
+    "Net Other Financing Charges",
+    "End Cash Position",
+    "Beginning Cash Position",
+    "Changes In Cash",
+    "Effect Of Exchange Rate Changes",
+    "Free Cash Flow",
+  ],
+};
 
 function formatValue(value) {
   if (value === null || value === undefined) return "-";
@@ -39,8 +145,9 @@ function sortColumns(columns) {
   });
 }
 
-function buildTable(statementData, title) {
-  const rows = Object.keys(statementData || {});
+function buildTable(statementData, sectionKey) {
+  const title = SECTIONS.find(([key]) => key === sectionKey)?.[1] || sectionKey;
+  const rows = orderRows(Object.keys(statementData || {}), sectionKey);
 
   if (!rows.length) {
     return `
@@ -84,6 +191,35 @@ function buildTable(statementData, title) {
   `;
 }
 
+function normalizeKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]/g, "");
+}
+
+function orderRows(rows, sectionKey) {
+  const preferredOrder = ROW_ORDER[sectionKey] || [];
+
+  if (!preferredOrder.length) return rows;
+
+  const preferredMap = new Map(
+    preferredOrder.map((label, index) => [normalizeKey(label), index])
+  );
+
+  return [...rows].sort((left, right) => {
+    const leftRank = preferredMap.get(normalizeKey(left));
+    const rightRank = preferredMap.get(normalizeKey(right));
+
+    const leftMatched = leftRank !== undefined;
+    const rightMatched = rightRank !== undefined;
+
+    if (leftMatched && rightMatched) return leftRank - rightRank;
+    if (leftMatched) return -1;
+    if (rightMatched) return 1;
+    return left.localeCompare(right);
+  });
+}
+
 function activateTab(tabName) {
   document.querySelectorAll(".tab-btn").forEach((tabButton) => {
     tabButton.classList.toggle("active", tabButton.dataset.tab === tabName);
@@ -118,12 +254,12 @@ function renderFinancialTables(data) {
   }
 
   const fullViewHtml = SECTIONS
-    .map(([key, title]) => buildTable(data[key], title))
+    .map(([key, title]) => buildTable(data[key], key))
     .join("");
 
   const singleViews = SECTIONS
     .map(([key, title]) => {
-      const body = buildTable(data[key], title);
+      const body = buildTable(data[key], key);
       return `<section class="statement" data-tab="${escapeHtml(key)}">${body}</section>`;
     })
     .join("");
