@@ -12,7 +12,6 @@ from typing import Any
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_cors import CORS
 import pandas as pd
-import requests
 from supabase import Client, create_client
 import yfinance as yf
 
@@ -293,38 +292,34 @@ def save_to_supabase(ticker: str, data: dict[str, Any]) -> None:
         raise SupabaseFetchError(f"Supabase upsert failed: {exc}") from exc
 
 
-def get_proxy_session() -> tuple[requests.Session, str | None]:
-    session = requests.Session()
-    session.headers.update(
-        {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/123.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-    )
-
+def get_proxy_session() -> str | None:
     proxies = _parse_proxy_list()
     if proxies:
         proxy = random.choice(proxies)
-        session.proxies = {"http": proxy, "https": proxy}
         logger.info("Using proxy: %s", _proxy_label(proxy))
-        return session, proxy
+        return proxy
 
     logger.info("Using proxy: direct")
-    return session, None
+    return None
 
 
 def fetch_from_yfinance_with_retry(ticker: str) -> dict[str, Any]:
     last_error: Exception | None = None
 
     for attempt, delay in enumerate(YFINANCE_RETRY_DELAYS, start=1):
-        session, _ = get_proxy_session()
+        proxy = get_proxy_session()
+        prev_http = os.environ.get("HTTP_PROXY")
+        prev_https = os.environ.get("HTTPS_PROXY")
+
+        if proxy:
+            os.environ["HTTP_PROXY"] = proxy
+            os.environ["HTTPS_PROXY"] = proxy
+        else:
+            os.environ.pop("HTTP_PROXY", None)
+            os.environ.pop("HTTPS_PROXY", None)
+
         try:
-            stock = yf.Ticker(ticker, session=session)
+            stock = yf.Ticker(ticker)
             balance_sheet = stock.balance_sheet
             income_statement = stock.financials
             cashflow_statement = stock.cashflow
@@ -360,6 +355,15 @@ def fetch_from_yfinance_with_retry(ticker: str) -> dict[str, Any]:
             logger.warning("yfinance fetch failed for %s on attempt %s: %s", ticker, attempt, exc)
             if attempt < len(YFINANCE_RETRY_DELAYS):
                 time.sleep(delay)
+        finally:
+            if prev_http is None:
+                os.environ.pop("HTTP_PROXY", None)
+            else:
+                os.environ["HTTP_PROXY"] = prev_http
+            if prev_https is None:
+                os.environ.pop("HTTPS_PROXY", None)
+            else:
+                os.environ["HTTPS_PROXY"] = prev_https
 
     if isinstance(last_error, RateLimitError):
         raise last_error
