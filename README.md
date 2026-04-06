@@ -1,15 +1,20 @@
 # Automated DCF Dashboard
 
-A Flask + yfinance web app that builds a full Discounted Cash Flow model from live financial statement data.
+A Flask + yfinance app that builds a full Discounted Cash Flow model and displays an interactive dashboard.
 
-## Features
+## What it does
 
-- Pulls balance sheet, income statement, and cash flow data by ticker symbol.
-- Uses historical averages when assumptions are left blank.
-- Projects 5-year revenue, EBIT, NOPAT, reinvestment, and FCFF.
-- Discounts FCFF using WACC and computes terminal value.
-- Outputs enterprise value, equity value, and intrinsic value per share.
-- Includes WACC vs terminal growth sensitivity matrix.
+- Pulls balance sheet, income statement, and cash flow statement for a ticker.
+- Caches company financial data in local server memory for 5 days.
+- Uses default assumptions from historical averages when input fields are left blank.
+- Builds a 5-year FCFF forecast table.
+- Shows valuation summary (PV of FCFF, terminal value, EV, equity value, intrinsic share price).
+- Shows WACC vs terminal growth sensitivity table.
+- Shows interactive projection chart for Revenue, EBIT, and FCFF.
+- Shows financial statements in 3 tabs:
+  - Balance Sheet
+  - Income Statement
+  - Cash Flow Statement
 
 ## Run locally
 
@@ -18,13 +23,11 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Then open: `http://127.0.0.1:5000`
+Open `http://127.0.0.1:5000`
 
 ## API
 
 ### `POST /dcf`
-
-Request body:
 
 ```json
 {
@@ -42,15 +45,16 @@ Request body:
 }
 ```
 
-Any omitted assumption is auto-filled from historical values (or model defaults).
+Response includes:
+- `assumptions`
+- `defaulted_fields`
+- `forecast`
+- `valuation`
+- `sensitivity`
+- `source_data`
+- `from_cache`
+- `last_updated`
 
 ### `GET /fetch-data?query=AAPL`
 
-Returns raw statement data for balance sheet, income statement, and cash flow.
-
-## Deploy on Render
-
-Use the existing `render.yaml`:
-
-- Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn app:app`
+Returns statement data and cache metadata (`from_cache`, `last_updated`).
