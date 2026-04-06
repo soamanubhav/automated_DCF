@@ -67,7 +67,7 @@
 
       try {
         const res = await fetch(
-          `/fetch-data?query=${encodeURIComponent(query)}`
+          `https://automated-dcf.onrender.com/fetch-data?query=${encodeURIComponent(query)}`
         );
 
         const data = await res.json();
