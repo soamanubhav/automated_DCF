@@ -93,3 +93,42 @@ If you do not want to use `render.yaml`, set this manually in Render:
 - **Runtime:** Python
 - **Build Command:** `pip install -r requirements.txt`
 - **Start Command:** `gunicorn app:app`
+
+## Use this API in your own website
+
+If your site is hosted on another domain, call the deployed endpoint directly:
+
+- API URL: `https://automated-dcf.onrender.com/fetch-data`
+- Method: `POST`
+- JSON body: `{ "query": "AAPL" }`
+
+### Example frontend snippet
+
+```html
+<input id="ticker" placeholder="AAPL" />
+<button id="fetch-data">Fetch Data</button>
+<pre id="result"></pre>
+
+<script>
+  document.getElementById('fetch-data').addEventListener('click', async () => {
+    const query = document.getElementById('ticker').value.trim();
+    const res = await fetch('https://automated-dcf.onrender.com/fetch-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+
+    const data = await res.json();
+    document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+  });
+</script>
+```
+
+### CORS control
+
+- By default, this project allows all origins for `/fetch-data`.
+- For production hardening, set `CORS_ORIGINS` on Render as a comma-separated list:
+
+```text
+https://yourdomain.com,https://www.yourdomain.com
+```

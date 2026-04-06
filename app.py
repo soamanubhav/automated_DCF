@@ -5,10 +5,19 @@ import os
 from typing import Any
 
 from flask import Flask, jsonify, render_template, request
+from flask_cors import CORS
 import pandas as pd
 import yfinance as yf
 
 app = Flask(__name__)
+
+cors_origins_env = os.environ.get("CORS_ORIGINS", "*").strip()
+cors_origins = (
+    "*"
+    if cors_origins_env == "*"
+    else [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+)
+CORS(app, resources={r"/fetch-data": {"origins": cors_origins}})
 
 
 def _sanitize_json_value(value: Any) -> Any:
