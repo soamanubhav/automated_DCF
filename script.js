@@ -2,12 +2,20 @@ const runBtn = document.getElementById("run-btn");
 const tickerInput = document.getElementById("ticker");
 const statusEl = document.getElementById("status");
 const defaultsChip = document.getElementById("defaults-chip");
+const manualSharesInput = document.getElementById("manual_shares_outstanding");
 
 const summaryEl = document.getElementById("summary");
 const chartsEl = document.getElementById("charts");
 const forecastEl = document.getElementById("forecast");
 const sensitivityEl = document.getElementById("sensitivity");
 const statementsEl = document.getElementById("statements");
+const API_BASE = window.location.hostname.includes("github.io")
+  ? "https://automated-dcf.onrender.com"
+  : "";
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`;
+}
 
 const ASSUMPTION_FIELDS = [
   "revenue_growth_rate",
@@ -55,6 +63,14 @@ function collectAssumptions() {
   return assumptions;
 }
 
+function collectManualSharesOutstanding() {
+  if (!manualSharesInput) return null;
+  const rawValue = manualSharesInput.value.trim();
+  if (!rawValue) return null;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 function showPanels() {
   [summaryEl, chartsEl, forecastEl, sensitivityEl, statementsEl].forEach((el) => el.classList.remove("hidden"));
 }
@@ -98,7 +114,7 @@ function buildSummary(query, assumptions, valuation) {
       <div><strong>Enterprise Value (EV)</strong><span>${formatMoney(valuation.enterprise_value)}</span></div>
       <div><strong>Less: Net Debt</strong><span>${formatMoney(valuation.debt - valuation.cash)}</span></div>
       <div><strong>Equity Value</strong><span>${formatMoney(valuation.equity_value)}</span></div>
-      <div><strong>Intrinsic Share Price</strong><span>${formatMoney(valuation.intrinsic_price_per_share)}</span></div>
+      <div><strong>Fair Value per Share</strong><span>${formatMoney(valuation.intrinsic_price_per_share)}</span></div>
       <div><strong>WACC</strong><span>${formatPercent(assumptions.wacc)}</span></div>
       <div><strong>Terminal Growth</strong><span>${formatPercent(assumptions.terminal_growth_rate)}</span></div>
     </div>
@@ -116,8 +132,8 @@ function buildSummary(query, assumptions, valuation) {
           <tr><td>Cash</td><td>${formatMoney(valuation.cash)}</td></tr>
           <tr><td>Debt</td><td>${formatMoney(valuation.debt)}</td></tr>
           <tr><td>Equity Value</td><td>${formatMoney(valuation.equity_value)}</td></tr>
-          <tr><td>Shares Outstanding</td><td>${formatNumber(valuation.shares_outstanding, 0)}</td></tr>
-          <tr><td>Intrinsic Share Price</td><td>${formatMoney(valuation.intrinsic_price_per_share)}</td></tr>
+          <tr><td>Ordinary Shares Number</td><td>${formatNumber(valuation.shares_outstanding, 0)}</td></tr>
+          <tr><td>Fair Value per Share</td><td>${formatMoney(valuation.intrinsic_price_per_share)}</td></tr>
         </tbody>
       </table>
     </div>
@@ -230,9 +246,14 @@ function colorForCell(value, min, max) {
   return `background: hsl(${hue}, 60%, 24%);`;
 }
 
-function buildSensitivityTable(sensitivity) {
-  const { wacc_axis: waccAxis, growth_axis: growthAxis, enterprise_value_matrix: matrix } = sensitivity;
+function buildSensitivityTable(title, waccAxis, growthAxis, matrix, valueFormatter = formatMoney) {
   const values = matrix.flat().filter((value) => value !== null);
+  if (!values.length) {
+    return `
+      <h3>${title}</h3>
+      <div class="empty">Sensitivity data unavailable for the current assumptions.</div>
+    `;
+  }
   const min = Math.min(...values);
   const max = Math.max(...values);
 
@@ -243,14 +264,14 @@ function buildSensitivityTable(sensitivity) {
   const rows = growthAxis
     .map((g, rowIndex) => {
       const cells = matrix[rowIndex]
-        .map((value) => `<td style="${colorForCell(value, min, max)}">${value === null ? "-" : formatMoney(value)}</td>`)
+        .map((value) => `<td style="${colorForCell(value, min, max)}">${value === null ? "-" : valueFormatter(value)}</td>`)
         .join("");
       return `<tr><td>${formatPercent(g)}</td>${cells}</tr>`;
     })
     .join("");
 
-  sensitivityEl.innerHTML = `
-    <h2>Sensitivity Analysis (Enterprise Value)</h2>
+  return `
+    <h3>${title}</h3>
     <div class="table-wrap">
       <table>
         <thead><tr>${headerCells}</tr></thead>
@@ -326,10 +347,16 @@ runBtn.addEventListener("click", async () => {
   resetPanels();
 
   try {
-    const res = await fetch("/dcf", {
+    const manualSharesOutstanding = collectManualSharesOutstanding();
+    const payload = { query, assumptions: collectAssumptions() };
+    if (manualSharesOutstanding !== null) {
+      payload.manual_shares_outstanding = manualSharesOutstanding;
+    }
+
+    const res = await fetch(apiUrl("/dcf"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, assumptions: collectAssumptions() }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
@@ -343,7 +370,23 @@ runBtn.addEventListener("click", async () => {
     buildSummary(data.query, data.assumptions, data.valuation);
     renderForecastChart(data.forecast || []);
     buildForecastTable(data.forecast || []);
-    buildSensitivityTable(data.sensitivity);
+    sensitivityEl.innerHTML = `
+      <h2>Sensitivity Analysis</h2>
+      ${buildSensitivityTable(
+        "Enterprise Value",
+        data.sensitivity.wacc_axis,
+        data.sensitivity.growth_axis,
+        data.sensitivity.enterprise_value_matrix,
+        formatMoney
+      )}
+      ${buildSensitivityTable(
+        "Fair Value per Share",
+        data.sensitivity.wacc_axis,
+        data.sensitivity.growth_axis,
+        data.sensitivity.share_price_matrix,
+        formatMoney
+      )}
+    `;
     buildStatementTabs(data.source_data || {});
 
     const cached = data.from_cache ? "(loaded from local cache)" : "(freshly fetched)";

@@ -204,6 +204,9 @@ def _build_sensitivity(
     base_terminal_growth: float,
     discount_t: int,
     present_value_sum: float,
+    cash: float,
+    debt: float,
+    shares_outstanding: float,
 ) -> dict[str, Any]:
     wacc_steps = [base_wacc - 0.01, base_wacc - 0.005, base_wacc, base_wacc + 0.005, base_wacc + 0.01]
     growth_steps = [
@@ -217,24 +220,39 @@ def _build_sensitivity(
     wacc_axis = [round(max(step, 0.01), 4) for step in wacc_steps]
     growth_axis = [round(max(min(step, 0.06), 0.0), 4) for step in growth_steps]
 
-    matrix: list[list[float | None]] = []
+    enterprise_value_matrix: list[list[float | None]] = []
+    equity_value_matrix: list[list[float | None]] = []
+    share_price_matrix: list[list[float | None]] = []
     for growth in growth_axis:
-        row: list[float | None] = []
+        enterprise_row: list[float | None] = []
+        equity_row: list[float | None] = []
+        price_row: list[float | None] = []
         for wacc in wacc_axis:
             if wacc <= growth:
-                row.append(None)
+                enterprise_row.append(None)
+                equity_row.append(None)
+                price_row.append(None)
                 continue
 
             terminal_value = base_fcff * (1 + growth) / (wacc - growth)
             discounted_terminal = terminal_value / ((1 + wacc) ** discount_t)
             enterprise_value = present_value_sum + discounted_terminal
-            row.append(round(enterprise_value, 2))
-        matrix.append(row)
+            equity_value = enterprise_value + cash - debt
+            fair_value_per_share = equity_value / shares_outstanding if shares_outstanding > 0 else None
+
+            enterprise_row.append(round(enterprise_value, 2))
+            equity_row.append(round(equity_value, 2))
+            price_row.append(round(fair_value_per_share, 2) if fair_value_per_share is not None else None)
+        enterprise_value_matrix.append(enterprise_row)
+        equity_value_matrix.append(equity_row)
+        share_price_matrix.append(price_row)
 
     return {
         "wacc_axis": wacc_axis,
         "growth_axis": growth_axis,
-        "enterprise_value_matrix": matrix,
+        "enterprise_value_matrix": enterprise_value_matrix,
+        "equity_value_matrix": equity_value_matrix,
+        "share_price_matrix": share_price_matrix,
     }
 
 
@@ -431,7 +449,11 @@ def _get_company_financials(ticker_symbol: str) -> dict[str, Any]:
     return fresh_data
 
 
-def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]) -> dict[str, Any]:
+def _compute_dcf(
+    company_data: dict[str, Any],
+    assumption_inputs: dict[str, Any],
+    manual_shares_outstanding: float | None = None,
+) -> dict[str, Any]:
     ticker_symbol = company_data["ticker"]
     balance_sheet = company_data["balance_sheet"]
     income_statement = company_data["income_statement"]
@@ -571,7 +593,15 @@ def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]
 
     equity_value = enterprise_value + cash - debt
 
-    shares = float(info.get("sharesOutstanding") or 0)
+    ordinary_shares_series = _extract_series(
+        balance_sheet,
+        ["Ordinary Shares Number", "Share Issued", "Common Stock Shares Outstanding"],
+    )
+    shares = float(ordinary_shares_series.iloc[-1]) if not ordinary_shares_series.empty else 0.0
+    if shares <= 0:
+        shares = float(info.get("sharesOutstanding") or 0)
+    if manual_shares_outstanding is not None and manual_shares_outstanding > 0:
+        shares = manual_shares_outstanding
     if shares <= 0:
         shares = 1.0
 
@@ -583,6 +613,9 @@ def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]
         base_terminal_growth=assumptions["terminal_growth_rate"],
         discount_t=FORECAST_YEARS,
         present_value_sum=pv_fcff_total,
+        cash=cash,
+        debt=debt,
+        shares_outstanding=shares,
     )
 
     return {
@@ -693,9 +726,13 @@ def dcf_valuation():
     if not isinstance(assumptions, dict):
         return jsonify({"error": "Assumptions must be a JSON object."}), 400
 
+    manual_shares = _safe_float(payload.get("manual_shares_outstanding"))
+    if manual_shares is not None and manual_shares <= 0:
+        return jsonify({"error": "manual_shares_outstanding must be a positive number."}), 400
+
     try:
         company_data = _get_company_financials(query)
-        result = _compute_dcf(company_data, assumptions)
+        result = _compute_dcf(company_data, assumptions, manual_shares_outstanding=manual_shares)
         result["from_cache"] = company_data["from_cache"]
         result["last_updated"] = company_data["last_updated"]
     except InvalidTickerError as exc:
