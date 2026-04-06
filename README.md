@@ -118,7 +118,15 @@ If your site is hosted on another domain, call the deployed endpoint directly:
       body: JSON.stringify({ query })
     });
 
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await res.text();
+      throw new Error(`Non-JSON response (HTTP ${res.status}): ${text.slice(0, 120)}`);
+    }
+
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
     document.getElementById('result').textContent = JSON.stringify(data, null, 2);
   });
 </script>

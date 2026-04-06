@@ -70,11 +70,14 @@ def fetch_data():
     if not query:
         return jsonify({"error": "Missing company name or ticker."}), 400
 
-    ticker = yf.Ticker(query)
+    try:
+        ticker = yf.Ticker(query)
 
-    balance_sheet = _frame_to_dict(ticker.balance_sheet)
-    income_statement = _frame_to_dict(ticker.financials)
-    cash_flow_statement = _frame_to_dict(ticker.cashflow)
+        balance_sheet = _frame_to_dict(ticker.balance_sheet)
+        income_statement = _frame_to_dict(ticker.financials)
+        cash_flow_statement = _frame_to_dict(ticker.cashflow)
+    except Exception as exc:
+        return jsonify({"error": f"Failed to fetch financial data: {exc}"}), 502
 
     if not any([balance_sheet, income_statement, cash_flow_statement]):
         return (
