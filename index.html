@@ -202,6 +202,52 @@
       font-size: 13px;
       padding: 14px;
     }
+
+    .error {
+      color: #b42318;
+      background: #fef3f2;
+      border: 1px solid #fecdca;
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .statement {
+      margin-bottom: 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .statement-title {
+      margin: 0;
+      font-size: 13px;
+      padding: 8px 10px;
+      background: #f2f4f7;
+      border-bottom: 1px solid #ddd;
+      text-transform: capitalize;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    th, td {
+      border: 1px solid #eee;
+      padding: 6px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child, td:first-child {
+      text-align: left;
+      font-weight: 600;
+      background: #fafafa;
+      position: sticky;
+      left: 0;
+    }
   </style>
 </head>
 
@@ -359,6 +405,77 @@
       tabs.style.display = "none";
       tabs.innerHTML = "";
       output.innerHTML = `<div class="empty-state">Loading...</div>`;
+    }
+
+    function formatValue(value) {
+      if (value === null || value === undefined) return "-";
+      if (typeof value === "number") return value.toLocaleString();
+      return String(value);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function renderStatementTable(title, statementData) {
+      const rows = Object.keys(statementData || {});
+      if (!rows.length) return "";
+
+      const columnSet = new Set();
+      for (const rowName of rows) {
+        const row = statementData[rowName] || {};
+        Object.keys(row).forEach((col) => columnSet.add(col));
+      }
+      const columns = Array.from(columnSet);
+
+      const headerCells = [`<th>Metric</th>`]
+        .concat(columns.map((col) => `<th>${escapeHtml(col)}</th>`))
+        .join("");
+
+      const bodyRows = rows
+        .map((rowName) => {
+          const row = statementData[rowName] || {};
+          const dataCells = columns
+            .map((col) => `<td>${escapeHtml(formatValue(row[col]))}</td>`)
+            .join("");
+          return `<tr><td>${escapeHtml(rowName)}</td>${dataCells}</tr>`;
+        })
+        .join("");
+
+      return `
+        <section class="statement">
+          <h4 class="statement-title">${escapeHtml(title.replace(/_/g, " "))}</h4>
+          <table>
+            <thead><tr>${headerCells}</tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+        </section>
+      `;
+    }
+
+    function renderFinancialTables(data) {
+      const sections = [
+        ["balance_sheet", data.balance_sheet],
+        ["income_statement", data.income_statement],
+        ["cash_flow_statement", data.cash_flow_statement],
+      ];
+
+      const tablesHtml = sections
+        .map(([title, value]) => renderStatementTable(title, value))
+        .filter(Boolean)
+        .join("");
+
+      if (!tablesHtml) {
+        output.innerHTML = `<div class="error">No tabular financial data returned.</div>`;
+        return;
+      }
+
+      output.innerHTML = tablesHtml;
     }
 
     btn.addEventListener("click", async () => {
