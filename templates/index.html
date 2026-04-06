@@ -103,7 +103,7 @@
           placeholder="e.g., Apple or AAPL"
           aria-label="Company Name or Ticker"
         />
-        <button id="fetch-btn" type="submit">Fetch Data</button>
+        <button id="fetch-btn" type="button">Fetch Data</button>
       </form>
       <p id="status" class="status"></p>
       <pre id="output" hidden></pre>
@@ -127,9 +127,7 @@
         status.style.color = isError ? '#b42318' : '#344054';
       };
 
-      async function fetchData(event) {
-        event.preventDefault();
-
+      async function fetchData() {
         const query = input.value.trim();
 
         if (!query) {
@@ -143,8 +141,11 @@
         output.hidden = true;
 
         try {
-          const url = `${apiBaseUrl}/fetch-data?query=${encodeURIComponent(query)}`;
-          const res = await fetch(url, { method: 'GET' });
+          const res = await fetch(`${apiBaseUrl}/fetch-data`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query }),
+          });
 
           const contentType = res.headers.get('content-type') || '';
           if (!contentType.includes('application/json')) {
@@ -179,7 +180,20 @@
         }
       }
 
-      form.addEventListener('submit', fetchData);
+      btn.addEventListener('click', fetchData);
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          fetchData();
+        }
+      });
+
+      if (form) {
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          fetchData();
+        });
+      }
 
       if (window.location.protocol === 'file:') {
         setStatus(
