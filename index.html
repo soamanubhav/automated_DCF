@@ -2,54 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Financial Analysis & DCF Valuation Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Company Data Fetcher</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-  <div class="app-layout">
-    <aside class="sidebar">
-      <h1 class="brand">Automated DCF</h1>
+  <div class="page">
+    <div class="card">
+      <h3 class="title">Financial Data Fetcher</h3>
+      <p class="subtitle">Fetch and explore Income Statement, Balance Sheet, and Cash Flow in separate tabs.</p>
 
-      <label class="field-label" for="ticker">Company Ticker</label>
-      <input id="ticker" class="ticker-input" placeholder="AAPL / MSFT / RELIANCE.NS" />
+      <div class="controls">
+        <input id="ticker" placeholder="Try RELIANCE.NS / AAPL / MSFT" />
+        <button id="fetch-btn">Fetch Data</button>
+      </div>
 
-      <div id="control-panel" class="control-panel"></div>
-
-      <button id="fetch-btn" class="fetch-btn">Get Data</button>
-    </aside>
-
-    <main class="main">
-      <header class="main-header">
-        <h2>Financial Analysis &amp; DCF Valuation Tool</h2>
-        <div id="query-chip" class="query-chip"></div>
-      </header>
-
+      <div id="query-chip" class="query-chip"></div>
       <div id="tabs" class="tabs"></div>
-
-      <section id="statement-area" class="section statement-area"></section>
-
-      <section class="section">
-        <h3>DCF Valuation</h3>
-        <div id="valuation-cards" class="valuation-cards"></div>
-      </section>
-
-      <section class="section chart-grid">
-        <div class="chart-card">
-          <h3>Revenue Projection</h3>
-          <div id="revenue-chart" class="mini-chart"></div>
-        </div>
-        <div class="chart-card">
-          <h3>FCFF Projection</h3>
-          <div id="fcff-chart" class="mini-chart line"></div>
-        </div>
-        <div class="chart-card sensitivity">
-          <h3>Sensitivity Analysis</h3>
-          <p class="muted">WACC vs Terminal Growth</p>
-          <div id="sensitivity-table"></div>
-        </div>
-      </section>
-    </main>
+      <div id="output" class="output">
+        <div class="empty-state">Enter a ticker and click <strong>Fetch Data</strong> to view statements.</div>
+      </div>
+    </div>
   </div>
 
   <script src="script.js"></script>
