@@ -404,6 +404,11 @@ importJsonBtn.addEventListener("click", () => {
   importJsonFileInput.click();
 });
 
+function looksLikeModelResponse(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  return Boolean(payload.valuation && payload.forecast && payload.sensitivity);
+}
+
 importJsonFileInput.addEventListener("change", async (event) => {
   const [file] = event.target.files || [];
   if (!file) return;
@@ -411,14 +416,15 @@ importJsonFileInput.addEventListener("change", async (event) => {
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
-    const requestPayload = parsed?.model_request || parsed || {};
-    const modelData = parsed?.model_response;
+    const modelData = parsed?.model_response || (looksLikeModelResponse(parsed) ? parsed : null);
+    const requestPayload = parsed?.model_request
+      || (modelData ? { query: modelData.query || modelData.ticker || "", assumptions: modelData.assumptions || {} } : parsed || {});
     const fallbackTicker = modelData?.query || "";
 
     hydrateInputsFromImport(requestPayload, fallbackTicker);
 
     if (!modelData) {
-      setStatus("Imported assumptions only. Click 'Run DCF Model' to generate results.");
+      setStatus("Imported assumptions only. This file has no saved model output to render.", true);
       return;
     }
 
@@ -426,7 +432,7 @@ importJsonFileInput.addEventListener("change", async (event) => {
     lastModelResponse = modelData;
     resetPanels();
     renderModelData(modelData);
-    setStatus(`Imported model JSON for ${modelData.query || "ticker"} from file.`);
+    setStatus(`Imported model JSON for ${modelData.query || modelData.ticker || "ticker"} from file (no backend call made).`);
   } catch (error) {
     setStatus("Invalid JSON file. Please import an exported model JSON file.", true);
     console.error(error);
