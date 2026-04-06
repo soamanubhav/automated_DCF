@@ -11,13 +11,7 @@ import yfinance as yf
 
 app = Flask(__name__)
 
-cors_origins_env = os.environ.get("CORS_ORIGINS", "*").strip()
-cors_origins = (
-    "*"
-    if cors_origins_env == "*"
-    else [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
-)
-CORS(app, resources={r"/*": {"origins": cors_origins}}, methods=["GET", "POST", "OPTIONS"])
+CORS(app, resources={r"/*": {"origins": "*"}}, methods=["GET", "POST", "OPTIONS"])
 
 
 def _sanitize_json_value(value: Any) -> Any:

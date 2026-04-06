@@ -132,12 +132,8 @@ If your site is hosted on another domain, call the deployed endpoint directly:
 
 ### CORS control
 
-- By default, this project allows all origins for `/fetch-data`.
-- For production hardening, set `CORS_ORIGINS` on Render as a comma-separated list:
-
-```text
-https://yourdomain.com,https://www.yourdomain.com
-```
+- This project currently allows all origins (`*`) for easier cross-site integration.
+- If you need strict origin allowlisting, update `CORS(...)` in `app.py` to your domain list and redeploy.
 
 
 ### Custom API base URL (optional)
