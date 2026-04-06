@@ -1,4 +1,7 @@
 const runBtn = document.getElementById("run-btn");
+const exportJsonBtn = document.getElementById("export-json-btn");
+const importJsonBtn = document.getElementById("import-json-btn");
+const importJsonFileInput = document.getElementById("import-json-file");
 const tickerInput = document.getElementById("ticker");
 const statusEl = document.getElementById("status");
 const defaultsChip = document.getElementById("defaults-chip");
@@ -27,6 +30,8 @@ const STATEMENT_TABS = [
 ];
 
 let forecastChart;
+let lastModelRequest = null;
+let lastModelResponse = null;
 
 function formatNumber(value, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
@@ -315,6 +320,26 @@ function buildStatementTabs(sourceData) {
   });
 }
 
+function hydrateInputsFromImport(payload = {}, fallbackTicker = "") {
+  const importedTicker = payload.query || payload.ticker || fallbackTicker || "";
+  tickerInput.value = importedTicker.toUpperCase();
+  const assumptions = payload.assumptions || {};
+  ASSUMPTION_FIELDS.forEach((field) => {
+    const value = assumptions[field];
+    document.getElementById(field).value = value === undefined || value === null ? "" : value;
+  });
+}
+
+function renderModelData(data) {
+  showPanels();
+  renderDefaultsChip(data.defaulted_fields, data.assumptions);
+  buildSummary(data.query, data.assumptions, data.valuation);
+  renderForecastChart(data.forecast || []);
+  buildForecastTable(data.forecast || []);
+  buildSensitivityTable(data.sensitivity);
+  buildStatementTabs(data.source_data || {});
+}
+
 runBtn.addEventListener("click", async () => {
   const query = tickerInput.value.trim().toUpperCase();
   if (!query) {
@@ -326,10 +351,11 @@ runBtn.addEventListener("click", async () => {
   resetPanels();
 
   try {
+    const requestPayload = { query, assumptions: collectAssumptions() };
     const res = await fetch("/dcf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, assumptions: collectAssumptions() }),
+      body: JSON.stringify(requestPayload),
     });
 
     const data = await res.json();
@@ -338,18 +364,79 @@ runBtn.addEventListener("click", async () => {
       return;
     }
 
-    showPanels();
-    renderDefaultsChip(data.defaulted_fields, data.assumptions);
-    buildSummary(data.query, data.assumptions, data.valuation);
-    renderForecastChart(data.forecast || []);
-    buildForecastTable(data.forecast || []);
-    buildSensitivityTable(data.sensitivity);
-    buildStatementTabs(data.source_data || {});
+    lastModelRequest = requestPayload;
+    lastModelResponse = data;
+    renderModelData(data);
 
     const cached = data.from_cache ? "(loaded from local cache)" : "(freshly fetched)";
     setStatus(`Model complete for ${data.query} ${cached}. Last data refresh: ${new Date(data.last_updated).toLocaleString()}`);
   } catch (error) {
     setStatus("Failed to reach backend service. Please try again.", true);
     console.error(error);
+  }
+});
+
+exportJsonBtn.addEventListener("click", () => {
+  if (!lastModelResponse) {
+    setStatus("Run the DCF model first, then export JSON.", true);
+    return;
+  }
+
+  const exportPayload = {
+    exported_at: new Date().toISOString(),
+    model_request: lastModelRequest,
+    model_response: lastModelResponse,
+  };
+
+  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const symbol = (lastModelResponse.query || "DCF").toUpperCase();
+  anchor.href = url;
+  anchor.download = `${symbol}_dcf_model_${stamp}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  setStatus(`Exported model JSON for ${symbol}.`);
+});
+
+importJsonBtn.addEventListener("click", () => {
+  importJsonFileInput.click();
+});
+
+function looksLikeModelResponse(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  return Boolean(payload.valuation && payload.forecast && payload.sensitivity);
+}
+
+importJsonFileInput.addEventListener("change", async (event) => {
+  const [file] = event.target.files || [];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const modelData = parsed?.model_response || (looksLikeModelResponse(parsed) ? parsed : null);
+    const requestPayload = parsed?.model_request
+      || (modelData ? { query: modelData.query || modelData.ticker || "", assumptions: modelData.assumptions || {} } : parsed || {});
+    const fallbackTicker = modelData?.query || "";
+
+    hydrateInputsFromImport(requestPayload, fallbackTicker);
+
+    if (!modelData) {
+      setStatus("Imported assumptions only. This file has no saved model output to render.", true);
+      return;
+    }
+
+    lastModelRequest = requestPayload;
+    lastModelResponse = modelData;
+    resetPanels();
+    renderModelData(modelData);
+    setStatus(`Imported model JSON for ${modelData.query || modelData.ticker || "ticker"} from file (no backend call made).`);
+  } catch (error) {
+    setStatus("Invalid JSON file. Please import an exported model JSON file.", true);
+    console.error(error);
+  } finally {
+    event.target.value = "";
   }
 });
