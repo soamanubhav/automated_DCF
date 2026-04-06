@@ -230,26 +230,27 @@ function colorForCell(value, min, max) {
   return `background: hsl(${hue}, 60%, 24%);`;
 }
 
-function renderMatrixTable({ title, rowLabel, rowAxis, colAxis, matrix, rowFormatter, colFormatter, valueFormat }) {
+function buildSensitivityTable(sensitivity) {
+  const { wacc_axis: waccAxis, growth_axis: growthAxis, enterprise_value_matrix: matrix } = sensitivity;
   const values = matrix.flat().filter((value) => value !== null);
-  const min = values.length ? Math.min(...values) : 0;
-  const max = values.length ? Math.max(...values) : 0;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
 
-  const headerCells = [`<th>${rowLabel}</th>`]
-    .concat(colAxis.map((col) => `<th>${colFormatter(col)}</th>`))
+  const headerCells = ["<th>g \\ WACC</th>"]
+    .concat(waccAxis.map((wacc) => `<th>${formatPercent(wacc)}</th>`))
     .join("");
 
-  const rows = rowAxis
-    .map((rowValue, rowIndex) => {
+  const rows = growthAxis
+    .map((g, rowIndex) => {
       const cells = matrix[rowIndex]
-        .map((value) => `<td style="${colorForCell(value, min, max)}">${value === null ? "-" : valueFormat(value)}</td>`)
+        .map((value) => `<td style="${colorForCell(value, min, max)}">${value === null ? "-" : formatMoney(value)}</td>`)
         .join("");
-      return `<tr><td>${rowFormatter(rowValue)}</td>${cells}</tr>`;
+      return `<tr><td>${formatPercent(g)}</td>${cells}</tr>`;
     })
     .join("");
 
-  return `
-    <h3>${title}</h3>
+  sensitivityEl.innerHTML = `
+    <h2>Sensitivity Analysis (Enterprise Value)</h2>
     <div class="table-wrap">
       <table>
         <thead><tr>${headerCells}</tr></thead>
@@ -257,60 +258,6 @@ function renderMatrixTable({ title, rowLabel, rowAxis, colAxis, matrix, rowForma
       </table>
     </div>
   `;
-}
-
-function buildSensitivityTable(sensitivity) {
-  const waccGrowth = sensitivity.wacc_growth || {};
-  const growthMargin = sensitivity.growth_margin || {};
-  const activeMetric = "price";
-
-  const metricFormats = {
-    price: (v) => formatMoney(v),
-    enterprise_value: (v) => formatMoney(v),
-  };
-
-  sensitivityEl.innerHTML = `
-    <h2>Sensitivity Analysis</h2>
-    <div class="row">
-      <label for="sensitivity-metric"><strong>Metric:</strong></label>
-      <select id="sensitivity-metric">
-        <option value="price" selected>Price</option>
-        <option value="enterprise_value">Enterprise Value</option>
-      </select>
-    </div>
-    <div id="sensitivity-body"></div>
-  `;
-
-  const metricSelect = sensitivityEl.querySelector("#sensitivity-metric");
-  const body = sensitivityEl.querySelector("#sensitivity-body");
-
-  const render = (metric) => {
-    body.innerHTML = `
-      ${renderMatrixTable({
-        title: `WACC vs Terminal Growth (${metric === "price" ? "Price" : "Enterprise Value"})`,
-        rowLabel: "g \\ WACC",
-        rowAxis: waccGrowth.growth_axis || [],
-        colAxis: waccGrowth.wacc_axis || [],
-        matrix: waccGrowth[metric] || [],
-        rowFormatter: formatPercent,
-        colFormatter: formatPercent,
-        valueFormat: metricFormats[metric],
-      })}
-      ${renderMatrixTable({
-        title: `Revenue Growth vs EBIT Margin (${metric === "price" ? "Price" : "Enterprise Value"})`,
-        rowLabel: "Growth \\ Margin",
-        rowAxis: growthMargin.growth_axis || [],
-        colAxis: growthMargin.margin_axis || [],
-        matrix: growthMargin[metric] || [],
-        rowFormatter: formatPercent,
-        colFormatter: formatPercent,
-        valueFormat: metricFormats[metric],
-      })}
-    `;
-  };
-
-  metricSelect.addEventListener("change", () => render(metricSelect.value));
-  render(activeMetric);
 }
 
 function buildStatementTable(title, statementData) {
