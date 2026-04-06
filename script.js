@@ -1,126 +1,33 @@
 const btn = document.getElementById("fetch-btn");
 const input = document.getElementById("ticker");
-const output = document.getElementById("output");
 const tabs = document.getElementById("tabs");
 const queryChip = document.getElementById("query-chip");
+const statementArea = document.getElementById("statement-area");
+const valuationCards = document.getElementById("valuation-cards");
+const revenueChart = document.getElementById("revenue-chart");
+const fcffChart = document.getElementById("fcff-chart");
+const sensitivityTable = document.getElementById("sensitivity-table");
+const controlPanel = document.getElementById("control-panel");
 
 const SECTIONS = [
-  ["balance_sheet", "Balance Sheet"],
   ["income_statement", "Income Statement"],
-  ["cash_flow_statement", "Cash Flow"],
+  ["balance_sheet", "Balance Sheet"],
+  ["cash_flow_statement", "Cash Flow Statement"],
 ];
 
-const ROW_ORDER = {
-  balance_sheet: [
-    "Total Assets",
-    "Current Assets",
-    "Cash And Cash Equivalents",
-    "Cash Cash Equivalents And Short Term Investments",
-    "Other Short Term Investments",
-    "Net Receivables",
-    "Inventory",
-    "Other Current Assets",
-    "Total Non Current Assets",
-    "Property Plant Equipment",
-    "Gross PPE",
-    "Accumulated Depreciation",
-    "Goodwill",
-    "Intangible Assets",
-    "Investments And Advances",
-    "Other Non Current Assets",
-    "Total Liabilities Net Minority Interest",
-    "Current Liabilities",
-    "Payables",
-    "Current Debt",
-    "Current Deferred Liabilities",
-    "Other Current Liabilities",
-    "Total Non Current Liabilities Net Minority Interest",
-    "Long Term Debt",
-    "Long Term Debt And Capital Lease Obligation",
-    "Non Current Deferred Liabilities",
-    "Other Non Current Liabilities",
-    "Stockholders Equity",
-    "Total Equity Gross Minority Interest",
-    "Common Stock Equity",
-    "Retained Earnings",
-    "Gains Losses Not Affecting Retained Earnings",
-    "Other Equity Adjustments",
-    "Total Capitalization",
-    "Working Capital",
-    "Net Tangible Assets",
-    "Invested Capital",
-    "Tangible Book Value",
-  ],
-  income_statement: [
-    "Total Revenue",
-    "Operating Revenue",
-    "Cost Of Revenue",
-    "Gross Profit",
-    "Operating Expense",
-    "Research And Development",
-    "Selling General And Administration",
-    "General And Administrative Expense",
-    "Selling And Marketing Expense",
-    "Operating Income",
-    "Operating Margin",
-    "EBIT",
-    "EBITDA",
-    "Interest Income",
-    "Interest Expense",
-    "Pretax Income",
-    "Tax Provision",
-    "Net Income",
-    "Net Income Common Stockholders",
-    "Diluted NI Availto Com Stockholders",
-    "Basic EPS",
-    "Diluted EPS",
-    "Basic Average Shares",
-    "Diluted Average Shares",
-    "Normalized Income",
-  ],
-  cash_flow_statement: [
-    "Operating Cash Flow",
-    "Cash Flow From Continuing Operating Activities",
-    "Net Income From Continuing Operations",
-    "Depreciation And Amortization",
-    "Deferred Tax",
-    "Stock Based Compensation",
-    "Change In Working Capital",
-    "Changes In Receivables",
-    "Changes In Inventory",
-    "Changes In Payables And Accrued Expense",
-    "Other Non Cash Items",
-    "Investing Cash Flow",
-    "Cash Flow From Continuing Investing Activities",
-    "Capital Expenditure",
-    "Purchase Of PPE",
-    "Sale Of PPE",
-    "Net Business Purchase And Sale",
-    "Purchase Of Investment",
-    "Sale Of Investment",
-    "Financing Cash Flow",
-    "Cash Flow From Continuing Financing Activities",
-    "Net Long Term Debt Issuance",
-    "Long Term Debt Issuance",
-    "Long Term Debt Payments",
-    "Cash Dividends Paid",
-    "Common Stock Issuance",
-    "Common Stock Payments",
-    "Repurchase Of Capital Stock",
-    "Net Other Financing Charges",
-    "End Cash Position",
-    "Beginning Cash Position",
-    "Changes In Cash",
-    "Effect Of Exchange Rate Changes",
-    "Free Cash Flow",
-  ],
-};
+const ASSUMPTIONS = [
+  ["revenueGrowth", "Revenue Growth (%)", 8, 0, 30, 0.5],
+  ["ebitMargin", "EBIT Margin (%)", 15, 0, 60, 0.5],
+  ["depreciationPct", "Depreciation/Rev (%)", 5, 0, 20, 0.25],
+  ["nwcPct", "NWC/Rev (%)", 3, -10, 20, 0.25],
+  ["debtPct", "Debt/Rev (%)", 20, 0, 200, 1],
+  ["capexPct", "Capex/Rev (%)", 8, 0, 40, 0.5],
+  ["wacc", "WACC (%)", 10, 5, 25, 0.25],
+  ["terminalGrowth", "Terminal Growth (%)", 3, 0, 8, 0.1],
+  ["taxRate", "Tax Rate (%)", 25, 0, 45, 0.5],
+];
 
-function formatValue(value) {
-  if (value === null || value === undefined) return "-";
-  if (typeof value === "number") return value.toLocaleString();
-  return String(value);
-}
+let latestData = null;
 
 function escapeHtml(value) {
   return String(value)
@@ -131,183 +38,333 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function sortColumns(columns) {
-  return columns.sort((left, right) => {
-    const leftDate = Date.parse(left);
-    const rightDate = Date.parse(right);
-    const leftIsDate = !Number.isNaN(leftDate);
-    const rightIsDate = !Number.isNaN(rightDate);
+function parseNum(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const cleaned = String(value).replaceAll(/[$₹,]/g, "").trim();
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : null;
+}
 
-    if (leftIsDate && rightIsDate) return rightDate - leftDate;
-    if (left === "TTM") return -1;
-    if (right === "TTM") return 1;
-    return left.localeCompare(right);
+function formatMoney(value) {
+  if (!Number.isFinite(value)) return "-";
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return `₹ ${(value / 1e12).toFixed(2)} T`;
+  if (abs >= 1e9) return `₹ ${(value / 1e9).toFixed(2)} B`;
+  if (abs >= 1e6) return `₹ ${(value / 1e6).toFixed(2)} M`;
+  return `₹ ${value.toFixed(2)}`;
+}
+
+function sortColumns(columns) {
+  return [...columns].sort((a, b) => {
+    const ad = Date.parse(a);
+    const bd = Date.parse(b);
+    if (!Number.isNaN(ad) && !Number.isNaN(bd)) return ad - bd;
+    return a.localeCompare(b);
   });
 }
 
-function buildTable(statementData, sectionKey) {
-  const title = SECTIONS.find(([key]) => key === sectionKey)?.[1] || sectionKey;
-  const rows = orderRows(Object.keys(statementData || {}), sectionKey);
+function buildControls() {
+  controlPanel.innerHTML = ASSUMPTIONS.map(
+    ([key, label, value, min, max, step]) => `
+      <label class="control">
+        <div class="control-head">
+          <span>${escapeHtml(label)}</span>
+          <strong id="${escapeHtml(key)}-value">${value.toFixed(1)}</strong>
+        </div>
+        <input id="${escapeHtml(key)}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" />
+      </label>
+    `
+  ).join("");
 
+  ASSUMPTIONS.forEach(([key]) => {
+    const slider = document.getElementById(key);
+    const out = document.getElementById(`${key}-value`);
+    slider.addEventListener("input", () => {
+      out.textContent = Number(slider.value).toFixed(1);
+      if (latestData) renderDCF(latestData);
+    });
+  });
+}
+
+function getAssumptions() {
+  return Object.fromEntries(
+    ASSUMPTIONS.map(([key]) => [key, Number(document.getElementById(key).value) / 100])
+  );
+}
+
+function pickLatestSeriesValue(statement, rowName, fallback = 0) {
+  const row = statement?.[rowName];
+  if (!row) return fallback;
+  const cols = sortColumns(Object.keys(row));
+  if (!cols.length) return fallback;
+  const val = parseNum(row[cols[cols.length - 1]]);
+  return val ?? fallback;
+}
+
+function pickHistoricalRevenue(statement) {
+  const row = statement?.["Total Revenue"] || statement?.["Operating Revenue"] || {};
+  const cols = sortColumns(Object.keys(row));
+  const values = cols.map((col) => parseNum(row[col])).filter((n) => n !== null);
+  return values;
+}
+
+function historicalAverageGrowth(revenues) {
+  if (revenues.length < 2) return null;
+  const growths = [];
+  for (let i = 1; i < revenues.length; i += 1) {
+    if (revenues[i - 1] > 0) growths.push((revenues[i] - revenues[i - 1]) / revenues[i - 1]);
+  }
+  if (!growths.length) return null;
+  const tail = growths.slice(-3);
+  return tail.reduce((a, b) => a + b, 0) / tail.length;
+}
+
+function renderStatementTable(statement, title, shortRows) {
+  const rows = Object.keys(statement || {});
   if (!rows.length) {
-    return `
-      <div class="statement-group">
-        <h4 class="statement-head">${escapeHtml(title)}</h4>
-        <div class="empty-state">No data found for this statement.</div>
-      </div>
-    `;
+    return `<div class="statement-card"><h4>${escapeHtml(title)}</h4><div class="error">No data.</div></div>`;
   }
 
   const columnSet = new Set();
-  for (const rowName of rows) {
-    const row = statementData[rowName] || {};
-    Object.keys(row).forEach((col) => columnSet.add(col));
-  }
+  rows.forEach((rowName) => Object.keys(statement[rowName] || {}).forEach((c) => columnSet.add(c)));
+  const columns = sortColumns([...columnSet]).slice(-2);
 
-  const columns = sortColumns(Array.from(columnSet));
+  const preferred = shortRows.filter((name) => rows.includes(name));
+  const selectedRows = preferred.length ? preferred : rows.slice(0, 6);
 
-  const headerCells = [`<th>Breakdown</th>`]
-    .concat(columns.map((col) => `<th>${escapeHtml(col)}</th>`))
+  const header = ["<th>Metric</th>"]
+    .concat(columns.map((c) => `<th>${escapeHtml(new Date(c).getFullYear() || c)}</th>`))
     .join("");
 
-  const bodyRows = rows
-    .map((rowName) => {
-      const row = statementData[rowName] || {};
-      const dataCells = columns
-        .map((col) => `<td>${escapeHtml(formatValue(row[col]))}</td>`)
+  const body = selectedRows
+    .map((r) => {
+      const vals = columns
+        .map((c) => `<td>${escapeHtml(formatMoney(parseNum(statement[r]?.[c]) || 0))}</td>`)
         .join("");
-      return `<tr><td>${escapeHtml(rowName)}</td>${dataCells}</tr>`;
+      return `<tr><td>${escapeHtml(r)}</td>${vals}</tr>`;
     })
     .join("");
 
   return `
-    <div class="statement-group">
-      <h4 class="statement-head">${escapeHtml(title)}</h4>
-      <table>
-        <thead><tr>${headerCells}</tr></thead>
-        <tbody>${bodyRows}</tbody>
-      </table>
+    <div class="statement-card">
+      <h4>${escapeHtml(title)}</h4>
+      <div class="statement-wrap">
+        <table>
+          <thead><tr>${header}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
     </div>
   `;
 }
 
-function normalizeKey(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]/g, "");
+function renderStatements(data) {
+  const income = renderStatementTable(data.income_statement, "Income Statement", ["Total Revenue", "EBIT", "Net Income"]);
+  const balance = renderStatementTable(data.balance_sheet, "Balance Sheet", ["Total Assets", "Total Liabilities Net Minority Interest", "Stockholders Equity"]);
+  const cash = renderStatementTable(data.cash_flow_statement, "Cash Flow Statement", ["Operating Cash Flow", "Investing Cash Flow", "Financing Cash Flow"]);
+
+  const sections = {
+    income_statement: `<div class="statement-grid">${income}</div>`,
+    balance_sheet: `<div class="statement-grid">${balance}</div>`,
+    cash_flow_statement: `<div class="statement-grid">${cash}</div>`,
+    all: `<div class="statement-grid">${income}${balance}${cash}</div>`,
+  };
+
+  statementArea.innerHTML = Object.entries(sections)
+    .map(([key, html]) => `<div class="statement" data-tab="${escapeHtml(key)}">${html}</div>`)
+    .join("");
 }
 
-function orderRows(rows, sectionKey) {
-  const preferredOrder = ROW_ORDER[sectionKey] || [];
+function renderTabs() {
+  const defs = [["all", "All"], ...SECTIONS];
+  tabs.innerHTML = defs
+    .map(([k, label]) => `<button class="tab-btn" data-tab="${escapeHtml(k)}">${escapeHtml(label)}</button>`)
+    .join("");
 
-  if (!preferredOrder.length) return rows;
-
-  const preferredMap = new Map(
-    preferredOrder.map((label, index) => [normalizeKey(label), index])
-  );
-
-  return [...rows].sort((left, right) => {
-    const leftRank = preferredMap.get(normalizeKey(left));
-    const rightRank = preferredMap.get(normalizeKey(right));
-
-    const leftMatched = leftRank !== undefined;
-    const rightMatched = rightRank !== undefined;
-
-    if (leftMatched && rightMatched) return leftRank - rightRank;
-    if (leftMatched) return -1;
-    if (rightMatched) return 1;
-    return left.localeCompare(right);
+  tabs.querySelectorAll(".tab-btn").forEach((tab) => {
+    tab.addEventListener("click", () => activateTab(tab.dataset.tab));
   });
+  activateTab("all");
 }
 
 function activateTab(tabName) {
-  document.querySelectorAll(".tab-btn").forEach((tabButton) => {
-    tabButton.classList.toggle("active", tabButton.dataset.tab === tabName);
+  document.querySelectorAll(".tab-btn").forEach((btnNode) => {
+    btnNode.classList.toggle("active", btnNode.dataset.tab === tabName);
   });
-
   document.querySelectorAll(".statement").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.tab === tabName);
   });
 }
 
-function renderTabs() {
-  const tabDefinitions = [["all", "All Statements"], ...SECTIONS];
+function projectDCF(data, assumptions) {
+  const income = data.income_statement || {};
+  const balance = data.balance_sheet || {};
 
-  tabs.innerHTML = tabDefinitions
-    .map(([key, label]) => `<button class="tab-btn" data-tab="${escapeHtml(key)}">${escapeHtml(label)}</button>`)
-    .join("");
+  const historicalRevenue = pickHistoricalRevenue(income);
+  const latestRevenue = historicalRevenue[historicalRevenue.length - 1] || 0;
+  const averageGrowth = historicalAverageGrowth(historicalRevenue);
+  const growth = assumptions.revenueGrowth || averageGrowth || 0.08;
 
-  tabs.style.display = "flex";
+  const baseEbitMargin = (pickLatestSeriesValue(income, "EBIT", 0) / (latestRevenue || 1)) || assumptions.ebitMargin;
+  const ebitMargin = assumptions.ebitMargin || baseEbitMargin;
 
-  tabs.querySelectorAll(".tab-btn").forEach((tabButton) => {
-    tabButton.addEventListener("click", () => activateTab(tabButton.dataset.tab));
+  const cash = pickLatestSeriesValue(balance, "Cash And Cash Equivalents", 0)
+    || pickLatestSeriesValue(balance, "Cash Cash Equivalents And Short Term Investments", 0);
+  const debt = pickLatestSeriesValue(balance, "Total Debt", latestRevenue * assumptions.debtPct);
+  const shares = pickLatestSeriesValue(income, "Diluted Average Shares", 1);
+
+  const years = [1, 2, 3, 4, 5];
+  const forecast = [];
+  let revenue = latestRevenue;
+
+  years.forEach((year) => {
+    revenue *= 1 + growth;
+    const ebit = revenue * ebitMargin;
+    const nopat = ebit * (1 - assumptions.taxRate);
+    const depreciation = revenue * assumptions.depreciationPct;
+    const capex = revenue * assumptions.capexPct;
+    const deltaNwc = revenue * assumptions.nwcPct;
+    const fcff = nopat + depreciation - capex - deltaNwc;
+    const pv = fcff / ((1 + assumptions.wacc) ** year);
+
+    forecast.push({ year, revenue, fcff, pv });
   });
+
+  const lastFcff = forecast[forecast.length - 1]?.fcff || 0;
+  const terminalValue = (lastFcff * (1 + assumptions.terminalGrowth))
+    / Math.max(assumptions.wacc - assumptions.terminalGrowth, 0.0001);
+  const pvTerminal = terminalValue / ((1 + assumptions.wacc) ** 5);
+  const enterpriseValue = forecast.reduce((sum, row) => sum + row.pv, 0) + pvTerminal;
+  const equityValue = enterpriseValue + cash - debt;
+  const valuePerShare = equityValue / Math.max(shares, 1);
+
+  return {
+    forecast,
+    enterpriseValue,
+    equityValue,
+    valuePerShare,
+  };
 }
 
-function renderFinancialTables(data) {
-  const allEmpty = SECTIONS.every(([key]) => !Object.keys(data[key] || {}).length);
-
-  if (allEmpty) {
-    tabs.style.display = "none";
-    output.innerHTML = `<div class="error">No tabular financial data returned.</div>`;
-    return;
-  }
-
-  const fullViewHtml = SECTIONS
-    .map(([key, title]) => buildTable(data[key], key))
-    .join("");
-
-  const singleViews = SECTIONS
-    .map(([key, title]) => {
-      const body = buildTable(data[key], key);
-      return `<section class="statement" data-tab="${escapeHtml(key)}">${body}</section>`;
-    })
-    .join("");
-
-  output.innerHTML = `
-    <section class="statement" data-tab="all">${fullViewHtml}</section>
-    ${singleViews}
-  `;
-
-  renderTabs();
-  activateTab("all");
+function renderValuation(result) {
+  valuationCards.innerHTML = [
+    ["Present Value", formatMoney(result.enterpriseValue)],
+    ["Equity Value", formatMoney(result.equityValue)],
+    ["Value Per Share", formatMoney(result.valuePerShare)],
+  ].map(([title, value]) => `
+      <article class="metric-card">
+        <p class="metric-title">${escapeHtml(title)}</p>
+        <p class="metric-value">${escapeHtml(value)}</p>
+      </article>
+    `).join("");
 }
 
-function resetResults() {
-  tabs.style.display = "none";
-  tabs.innerHTML = "";
-  output.innerHTML = `<div class="empty-state">Loading...</div>`;
+function renderBarChart(values, container) {
+  const max = Math.max(...values.map((v) => v.value), 1);
+  container.innerHTML = values.map((item) => {
+    const height = Math.max((item.value / max) * 150, 6);
+    return `<div class="bar" style="height:${height}px"><span>${escapeHtml(item.label)}</span></div>`;
+  }).join("");
+}
+
+function renderLineChart(values, container) {
+  const w = 460;
+  const h = 170;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = Math.max(max - min, 1);
+
+  const points = values.map((v, i) => {
+    const x = (i / Math.max(values.length - 1, 1)) * (w - 40) + 20;
+    const y = h - ((v - min) / range) * (h - 24) - 12;
+    return `${x},${y}`;
+  }).join(" ");
+
+  container.innerHTML = `<svg viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="#d87834" stroke-width="3" points="${points}"/></svg>`;
+}
+
+function renderSensitivity(baseData, assumptions) {
+  const waccSteps = [-0.02, -0.01, 0, 0.01, 0.02];
+  const gSteps = [-0.01, -0.005, 0, 0.005, 0.01];
+
+  const matrix = waccSteps.map((dw) => gSteps.map((dg) => {
+    const sim = projectDCF(baseData, {
+      ...assumptions,
+      wacc: Math.max(assumptions.wacc + dw, 0.03),
+      terminalGrowth: Math.max(Math.min(assumptions.terminalGrowth + dg, 0.08), 0),
+    });
+    return sim.valuePerShare;
+  }));
+
+  const flat = matrix.flat();
+  const low = Math.min(...flat);
+  const high = Math.max(...flat);
+
+  const cellClass = (value) => {
+    const pct = (value - low) / Math.max(high - low, 1);
+    if (pct > 0.66) return "good";
+    if (pct > 0.33) return "mid";
+    return "bad";
+  };
+
+  const header = `<tr><th>g \\ WACC</th>${waccSteps
+    .map((dw) => `<th>${((assumptions.wacc + dw) * 100).toFixed(1)}%</th>`)
+    .join("")}</tr>`;
+
+  const body = matrix
+    .map((row, rIx) => `<tr><th>${((assumptions.terminalGrowth + gSteps[rIx]) * 100).toFixed(1)}%</th>${row
+      .map((value) => `<td class="${cellClass(value)}">${escapeHtml(value.toFixed(0))}</td>`)
+      .join("")}</tr>`)
+    .join("");
+
+  sensitivityTable.innerHTML = `<table><thead>${header}</thead><tbody>${body}</tbody></table>`;
+}
+
+function renderDCF(data) {
+  const assumptions = getAssumptions();
+  const result = projectDCF(data, assumptions);
+
+  renderValuation(result);
+  renderBarChart(
+    result.forecast.map((f, index) => ({ label: `${new Date().getFullYear() + index + 1}`, value: f.revenue })),
+    revenueChart
+  );
+  renderLineChart(result.forecast.map((f) => f.fcff), fcffChart);
+  renderSensitivity(data, assumptions);
+}
+
+function renderError(message) {
+  statementArea.innerHTML = `<div class="error">${escapeHtml(message)}</div>`;
+  valuationCards.innerHTML = "";
+  revenueChart.innerHTML = "";
+  fcffChart.innerHTML = "";
+  sensitivityTable.innerHTML = "";
 }
 
 btn.addEventListener("click", async () => {
   const query = input.value.trim();
-
   if (!query) {
     alert("Enter ticker");
     return;
   }
 
-  resetResults();
-  queryChip.style.display = "none";
-
   try {
-    const res = await fetch(
-      `https://automated-dcf.onrender.com/fetch-data?query=${encodeURIComponent(query)}`
-    );
+    const response = await fetch(`/fetch-data?query=${encodeURIComponent(query)}`);
+    const data = await response.json();
 
-    const data = await res.json();
-
-    if (data.error) {
-      output.innerHTML = `<div class="error">❌ ${escapeHtml(data.error)}</div>`;
-      tabs.style.display = "none";
-    } else {
-      queryChip.textContent = `Showing data for: ${query}`;
-      queryChip.style.display = "inline-flex";
-      renderFinancialTables(data);
+    if (!response.ok || data.error) {
+      throw new Error(data.error || `HTTP ${response.status}`);
     }
-  } catch (err) {
-    output.innerHTML = `<div class="error">❌ Cannot reach backend</div>`;
-    tabs.style.display = "none";
-    console.error(err);
+
+    latestData = data;
+    queryChip.textContent = `Ticker: ${query.toUpperCase()}`;
+    renderTabs();
+    renderStatements(data);
+    renderDCF(data);
+  } catch (error) {
+    renderError(error.message || "Unable to fetch data.");
   }
 });
+
+buildControls();
