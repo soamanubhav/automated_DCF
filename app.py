@@ -38,18 +38,20 @@ def _sanitize_json_value(value: Any) -> Any:
 
 
 def _frame_to_dict(frame: Any) -> dict[str, dict[str, Any]]:
-    """Convert a yfinance DataFrame to a JSON-safe nested dictionary."""
     if frame is None or getattr(frame, "empty", True):
         return {}
 
     safe_frame = frame.copy()
+
+    # Convert index + columns to string
     safe_frame.index = safe_frame.index.map(str)
     safe_frame.columns = safe_frame.columns.map(str)
-    safe_frame = safe_frame.applymap(_sanitize_json_value)
 
+    # Convert to dict first
     raw_data = safe_frame.to_dict(orient="index")
-    return _sanitize_json_value(raw_data)
 
+    # Then sanitize recursively
+    return _sanitize_json_value(raw_data)
 
 @app.get("/")
 def index() -> str:
