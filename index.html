@@ -1,72 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Company Data Fetcher</title>
-    <style>
-      :root {
-        font-family: Arial, sans-serif;
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Company Data Fetcher</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #f6f7fb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      width: 400px;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+    }
+
+    pre {
+      margin-top: 15px;
+      max-height: 300px;
+      overflow: auto;
+      background: #eee;
+      padding: 10px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h3>Financial Data Fetcher</h3>
+
+    <input id="ticker" placeholder="RELIANCE.NS / AAPL" />
+    <button id="fetch-btn">Fetch Data</button>
+
+    <pre id="output"></pre>
+  </div>
+
+  <script>
+    const btn = document.getElementById("fetch-btn");
+    const input = document.getElementById("ticker");
+    const output = document.getElementById("output");
+
+    btn.addEventListener("click", async () => {
+      const query = input.value.trim();
+
+      if (!query) {
+        alert("Enter ticker");
+        return;
       }
 
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: #f6f7fb;
-      }
+      output.textContent = "Loading...";
 
-      .card {
-        width: min(90vw, 420px);
-        background: #fff;
-        padding: 1.5rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-      }
+      try {
+        const res = await fetch(
+          `/fetch-data?query=${encodeURIComponent(query)}`
+        );
 
-      label {
-        display: block;
-        font-size: 0.95rem;
-        margin-bottom: 0.5rem;
-      }
+        const data = await res.json();
 
-      input {
-        width: 100%;
-        padding: 0.7rem 0.8rem;
-        font-size: 1rem;
-        border: 1px solid #ccd2dd;
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-        box-sizing: border-box;
-      }
+        if (data.error) {
+          output.textContent = "❌ " + data.error;
+        } else {
+          output.textContent = JSON.stringify(data, null, 2);
+        }
 
-      button {
-        width: 100%;
-        padding: 0.75rem;
-        font-size: 1rem;
-        border: 0;
-        border-radius: 0.5rem;
-        background: #1f6feb;
-        color: #fff;
-        cursor: pointer;
+      } catch (err) {
+        output.textContent = "❌ Cannot reach backend";
+        console.error(err);
       }
-
-      button:hover {
-        background: #175bc1;
-      }
-    </style>
-  </head>
-  <body>
-    <main class="card">
-      <label for="company-input">Company Name / Ticker</label>
-      <input
-        id="company-input"
-        type="text"
-        placeholder="e.g., Apple or AAPL"
-        aria-label="Company Name or Ticker"
-      />
-      <button type="button">Fetch Data</button>
-    </main>
-  </body>
+    });
+  </script>
+</body>
 </html>
