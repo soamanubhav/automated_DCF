@@ -26,8 +26,8 @@ FORECAST_YEARS = 5
 CACHE_TTL_DAYS = 5
 SUPABASE_TTL_DAYS = 60
 YFINANCE_RETRY_DELAYS = [2, 4, 6]
-DEFAULT_SUPABASE_URL = "https://edlkhxolvejbcvbzvxgq.supabase.co"
-DEFAULT_SUPABASE_KEY = "sb_publishable_hV6D8_eHDtVZZsKLBiUv0w_nYaxWLlC"
+DEFAULT_SUPABASE_URL = "https://siktkhguuriujksehvoy.supabase.co"
+DEFAULT_SUPABASE_KEY = "sb_publishable_TWk9qxiciXlM4Cd3qR61Ww_t2wjcf0i"
 DEFAULT_PROXY_LIST = [
     "http://cunkpcet:6hjr3wvrwsg1@31.59.20.176:6754",
     "http://cunkpcet:6hjr3wvrwsg1@23.95.150.145:6114",
