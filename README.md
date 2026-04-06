@@ -29,17 +29,67 @@ The button sends a request to the backend endpoint `/fetch-data`, which returns:
 - income statement
 - cash flow statement
 
-## Deploy on Render
+## Deploy on Render (step by step)
 
-### Option 1: Using `render.yaml` (recommended)
+### 1) Push code to GitHub
 
-1. Push this repository to GitHub.
-2. In Render, choose **New +** → **Blueprint**.
-3. Select your repository.
-4. Render will detect `render.yaml` and create the web service.
+1. Create a GitHub repository (or use an existing one).
+2. Push this project branch to GitHub.
 
-### Option 2: Manual Render setup
+### 2) Create a Render account
 
+1. Go to [https://render.com](https://render.com).
+2. Sign in with GitHub (recommended for automatic deploys).
+
+### 3) Deploy with Blueprint (`render.yaml`) — recommended
+
+1. In Render dashboard, click **New +**.
+2. Select **Blueprint**.
+3. Choose your GitHub repo.
+4. Render auto-detects `render.yaml` and pre-fills service settings.
+5. Click **Apply** / **Create** to start deployment.
+
+Current blueprint settings from this repo:
+- Build command: `pip install -r requirements.txt`
+- Start command: `gunicorn app:app`
+- Runtime: Python
+
+### 4) Wait for first deploy
+
+1. Open your new web service in Render.
+2. Watch the deploy logs until you see a successful startup.
+3. Open the generated Render URL (for example `https://<service-name>.onrender.com`).
+
+### 5) Verify the app works
+
+1. Visit the root URL and confirm the UI loads.
+2. Enter a ticker such as `AAPL` and click **Fetch Data**.
+3. Confirm JSON output appears with statement sections.
+
+### 6) Optional: set manual environment variables
+
+Most setups work without extra env vars, but you can set:
+- `FLASK_DEBUG=false` (recommended in production)
+
+> Note: Render automatically provides the `PORT` environment variable. The app already reads this variable.
+
+### 7) Enable auto-deploys
+
+1. In Render service settings, ensure **Auto-Deploy** is enabled.
+2. Each push to your connected branch will trigger a new deployment.
+
+### 8) Troubleshooting checklist
+
+- **Build fails**: confirm `requirements.txt` includes all needed packages.
+- **App doesn’t start**: verify start command is `gunicorn app:app`.
+- **Button shows backend unreachable**: check service logs and confirm app is healthy.
+- **No data for a company**: use a valid ticker symbol (e.g., `MSFT`, `GOOGL`, `AMZN`).
+
+## Manual Render setup (without Blueprint)
+
+If you do not want to use `render.yaml`, set this manually in Render:
+
+- **Service type:** Web Service
 - **Runtime:** Python
 - **Build Command:** `pip install -r requirements.txt`
 - **Start Command:** `gunicorn app:app`
