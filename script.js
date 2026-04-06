@@ -320,8 +320,9 @@ function buildStatementTabs(sourceData) {
   });
 }
 
-function hydrateInputsFromImport(payload = {}) {
-  tickerInput.value = (payload.query || "").toUpperCase();
+function hydrateInputsFromImport(payload = {}, fallbackTicker = "") {
+  const importedTicker = payload.query || payload.ticker || fallbackTicker || "";
+  tickerInput.value = importedTicker.toUpperCase();
   const assumptions = payload.assumptions || {};
   ASSUMPTION_FIELDS.forEach((field) => {
     const value = assumptions[field];
@@ -410,10 +411,11 @@ importJsonFileInput.addEventListener("change", async (event) => {
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
-    const requestPayload = parsed?.model_request || {};
+    const requestPayload = parsed?.model_request || parsed || {};
     const modelData = parsed?.model_response;
+    const fallbackTicker = modelData?.query || "";
 
-    hydrateInputsFromImport(requestPayload);
+    hydrateInputsFromImport(requestPayload, fallbackTicker);
 
     if (!modelData) {
       setStatus("Imported assumptions only. Click 'Run DCF Model' to generate results.");
