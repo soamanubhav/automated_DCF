@@ -140,3 +140,16 @@ If your site is hosted on another domain, call the deployed endpoint directly:
 ```text
 https://yourdomain.com,https://www.yourdomain.com
 ```
+
+
+### Custom API base URL (optional)
+
+If your website is different from the Render app domain, you can set:
+
+```html
+<script>
+  window.API_BASE_URL = 'https://automated-dcf.onrender.com';
+</script>
+```
+
+Then your frontend can call `${window.API_BASE_URL}/fetch-data` consistently.

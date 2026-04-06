@@ -116,6 +116,12 @@
       const status = document.getElementById('status');
       const output = document.getElementById('output');
 
+      const defaultApiBase =
+        window.location.hostname.includes('onrender.com')
+          ? window.location.origin
+          : 'https://automated-dcf.onrender.com';
+      const apiBaseUrl = (window.API_BASE_URL || defaultApiBase).replace(/\/$/, '');
+
       const setStatus = (msg, isError = false) => {
         status.textContent = msg;
         status.style.color = isError ? '#b42318' : '#344054';
@@ -137,7 +143,7 @@
         output.hidden = true;
 
         try {
-          const res = await fetch('/fetch-data', {
+          const res = await fetch(`${apiBaseUrl}/fetch-data`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query }),
@@ -164,7 +170,7 @@
           const message = err instanceof Error ? err.message : String(err);
           if (message.includes('Failed to fetch')) {
             setStatus(
-              'Cannot reach backend. Start Flask and open http://127.0.0.1:5000.',
+              `Cannot reach backend at ${apiBaseUrl}/fetch-data. If local, start Flask. If deployed, verify CORS and API URL.`,
               true
             );
           } else {
@@ -180,7 +186,7 @@
 
       if (window.location.protocol === 'file:') {
         setStatus(
-          'This page must be opened from Flask at http://127.0.0.1:5000 (not as a local file).',
+          `This page must be opened from a server, not as a local file. Expected API base: ${apiBaseUrl}.`,
           true
         );
       }
