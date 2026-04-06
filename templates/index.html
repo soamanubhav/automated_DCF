@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Financial Statement Viewer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Financial Statement Viewer</h1>
+      <p class="subtitle">Fetch income statement, balance sheet, and cash flow data.</p>
+
+      <section class="controls">
+        <input id="tickerInput" type="text" value="RELIANCE.NS" placeholder="Enter ticker (e.g., RELIANCE.NS)" />
+        <button id="fetchBtn">Fetch Data</button>
+      </section>
+
+      <div id="loading" class="loading hidden" aria-live="polite">
+        <span class="spinner"></span>
+        <span>Fetching data...</span>
+      </div>
+
+      <div id="message" class="message" role="alert"></div>
+
+      <section id="results" class="results hidden">
+        <article>
+          <h2>Income Statement</h2>
+          <div id="incomeContainer"></div>
+        </article>
+
+        <article>
+          <h2>Balance Sheet</h2>
+          <div id="balanceContainer"></div>
+        </article>
+
+        <article>
+          <h2>Cash Flow</h2>
+          <div id="cashflowContainer"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+  </body>
+</html>
