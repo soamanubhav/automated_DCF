@@ -15,6 +15,7 @@ A Flask + yfinance app that builds a full Discounted Cash Flow model and display
   - Balance Sheet
   - Income Statement
   - Cash Flow Statement
+- Supports manual model export/import as JSON (assumptions + full model output snapshot).
 
 ## Run locally
 
