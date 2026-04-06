@@ -3,204 +3,448 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Company Financial Fetcher</title>
+    <title>Financial Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
       :root {
-        font-family: Arial, sans-serif;
+        --bg: #f3f6fb;
+        --card: #ffffff;
+        --text: #1f2937;
+        --muted: #667085;
+        --border: #e6eaf2;
+        --primary: #1f6feb;
+        --success: #15803d;
+        --danger: #b42318;
       }
+
+      * { box-sizing: border-box; }
 
       body {
         margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: #f6f7fb;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1rem;
       }
 
       .card {
-        width: min(92vw, 760px);
-        background: #fff;
-        padding: 1.5rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 10px 20px rgba(16, 24, 40, 0.04);
       }
 
-      .note {
-        margin-top: 0;
-        color: #475467;
-        font-size: 0.9rem;
-      }
-
-      .controls {
-        display: grid;
-        grid-template-columns: 1fr auto;
+      .header {
+        display: flex;
+        flex-wrap: wrap;
         gap: 0.75rem;
+        align-items: end;
+        padding: 1rem;
       }
+
+      .header .grow { flex: 1 1 320px; }
 
       label {
         display: block;
-        font-size: 0.95rem;
-        margin-bottom: 0.5rem;
+        font-size: 0.88rem;
+        color: var(--muted);
+        margin-bottom: 0.35rem;
       }
 
       input {
         width: 100%;
-        padding: 0.7rem 0.8rem;
+        border: 1px solid #d0d6e2;
+        border-radius: 10px;
+        padding: 0.75rem 0.85rem;
         font-size: 1rem;
-        border: 1px solid #ccd2dd;
-        border-radius: 0.5rem;
-        box-sizing: border-box;
       }
 
       button {
-        min-width: 120px;
-        padding: 0.75rem 1rem;
-        font-size: 1rem;
         border: 0;
-        border-radius: 0.5rem;
-        background: #1f6feb;
+        border-radius: 10px;
+        background: var(--primary);
         color: #fff;
+        padding: 0.78rem 1.1rem;
+        font-weight: 600;
         cursor: pointer;
       }
 
-      button:hover:enabled {
-        background: #175bc1;
-      }
-
-      button:disabled {
-        opacity: 0.6;
-        cursor: wait;
-      }
+      button:disabled { opacity: 0.65; cursor: wait; }
 
       .status {
-        margin: 1rem 0;
-        font-size: 0.9rem;
+        margin: 0 1rem 1rem;
+        min-height: 1.25rem;
+        font-size: 0.92rem;
       }
 
-      pre {
-        margin: 0;
-        max-height: 420px;
+      .status.error { color: var(--danger); }
+      .status.ok { color: var(--success); }
+
+      h2 {
+        margin: 1.25rem 0 0.75rem;
+        font-size: 1.1rem;
+      }
+
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.75rem;
+      }
+
+      .metric-card { padding: 0.9rem 1rem; }
+      .metric-label { color: var(--muted); font-size: 0.85rem; }
+      .metric-value { margin-top: 0.35rem; font-size: 1.15rem; font-weight: 700; }
+
+      .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+        gap: 0.75rem;
+      }
+
+      .chart-card {
+        padding: 0.8rem;
+        min-height: 285px;
+      }
+
+      .chart-wrap {
+        position: relative;
+        height: 230px;
+      }
+
+      .table-card { padding: 0.8rem; }
+
+      .table-wrap {
         overflow: auto;
-        background: #0b1020;
-        color: #e4e8f5;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        font-size: 0.85rem;
+        max-height: 420px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+
+      table {
+        border-collapse: collapse;
+        min-width: 720px;
+        width: 100%;
+        background: #fff;
+      }
+
+      thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #f8faff;
+      }
+
+      th, td {
+        border-bottom: 1px solid var(--border);
+        padding: 0.6rem 0.7rem;
+        font-size: 0.87rem;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      th:first-child, td:first-child {
+        text-align: left;
+        max-width: 280px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .section { margin-bottom: 1rem; }
+
+      @media (max-width: 700px) {
+        .container { padding: 0.6rem; }
+        .header { padding: 0.8rem; }
       }
     </style>
   </head>
   <body>
-    <main class="card">
-      <p class="note">
-        Run the Python server first, then open this app at
-        <code>http://127.0.0.1:5000</code>.
-      </p>
-      <label for="company-input">Company Name / Ticker</label>
-      <form id="fetch-form" class="controls">
-        <input
-          id="company-input"
-          type="text"
-          placeholder="e.g., Apple or AAPL"
-          aria-label="Company Name or Ticker"
-        />
-        <button id="fetch-btn" type="button">Fetch Data</button>
-      </form>
-      <p id="status" class="status"></p>
-      <pre id="output" hidden></pre>
-    </main>
+    <div class="container">
+      <div class="card section">
+        <div class="header">
+          <div class="grow">
+            <label for="queryInput">Company Ticker</label>
+            <input id="queryInput" type="text" value="AAPL" placeholder="AAPL, MSFT, TCS.NS" />
+          </div>
+          <button id="fetchBtn" type="button">Load Dashboard</button>
+        </div>
+        <div id="status" class="status"></div>
+      </div>
+
+      <h2>Key Metrics</h2>
+      <div id="highlights" class="metrics-grid section"></div>
+
+      <h2>Trend Charts</h2>
+      <div class="chart-grid section">
+        <div class="card chart-card"><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-wrap"><canvas id="netIncomeChart"></canvas></div></div>
+        <div class="card chart-card"><div class="chart-wrap"><canvas id="fcfChart"></canvas></div></div>
+      </div>
+
+      <h2>Financial Statements</h2>
+      <div id="tables"></div>
+    </div>
 
     <script>
-      const form = document.getElementById('fetch-form');
-      const input = document.getElementById('company-input');
-      const btn = document.getElementById('fetch-btn');
-      const status = document.getElementById('status');
-      const output = document.getElementById('output');
+      const API_ENDPOINT = 'https://automated-dcf.onrender.com/fetch-data';
+      const btn = document.getElementById('fetchBtn');
+      const input = document.getElementById('queryInput');
+      const statusNode = document.getElementById('status');
+      const highlightsNode = document.getElementById('highlights');
+      const tablesNode = document.getElementById('tables');
 
-      const defaultApiBase =
-        window.location.hostname.includes('onrender.com')
-          ? window.location.origin
-          : 'https://automated-dcf.onrender.com';
-      const apiBaseUrl = (window.API_BASE_URL || defaultApiBase).replace(/\/$/, '');
-
-      const setStatus = (msg, isError = false) => {
-        status.textContent = msg;
-        status.style.color = isError ? '#b42318' : '#344054';
+      const tableMetricPriority = {
+        income_statement: ['Total Revenue', 'Gross Profit', 'EBITDA', 'Operating Income', 'Net Income'],
+        balance_sheet: ['Total Assets', 'Total Liabilities Net Minority Interest', 'Stockholders Equity', 'Cash And Cash Equivalents'],
+        cash_flow_statement: ['Operating Cash Flow', 'Capital Expenditure', 'Free Cash Flow', 'Financing Cash Flow', 'Investing Cash Flow']
       };
 
-      async function fetchData() {
-        const query = input.value.trim();
+      const chartRefs = {
+        revenue: null,
+        netIncome: null,
+        fcf: null
+      };
 
+      function setStatus(message, type) {
+        statusNode.textContent = message;
+        statusNode.className = 'status' + (type ? ` ${type}` : '');
+      }
+
+      function toYear(ts) {
+        if (!ts) return '';
+        const str = String(ts);
+        const match = str.match(/\d{4}/);
+        return match ? match[0] : str;
+      }
+
+      function toSafeNumber(value) {
+        if (value === null || value === undefined || value === '') return null;
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
+      }
+
+      function formatIndianValue(value) {
+        const num = toSafeNumber(value);
+        if (num === null) return '—';
+
+        const abs = Math.abs(num);
+        const sign = num < 0 ? '-' : '';
+
+        if (abs >= 10000000) {
+          return `${sign}₹ ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(abs / 10000000)} Cr`;
+        }
+        if (abs >= 100000) {
+          return `${sign}₹ ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(abs / 100000)} Lakh`;
+        }
+        return `${sign}₹ ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(abs)}`;
+      }
+
+      function normalizeSection(sectionData) {
+        const section = sectionData || {};
+        const years = new Set();
+
+        Object.values(section).forEach((yearMap) => {
+          if (!yearMap || typeof yearMap !== 'object') return;
+          Object.keys(yearMap).forEach((k) => years.add(toYear(k)));
+        });
+
+        const sortedYears = Array.from(years).filter(Boolean).sort((a, b) => Number(a) - Number(b));
+
+        const metrics = Object.entries(section).map(([metric, yearlyData]) => {
+          const values = {};
+          sortedYears.forEach((year) => {
+            const rawKey = Object.keys(yearlyData || {}).find((k) => toYear(k) === year);
+            values[year] = rawKey ? toSafeNumber(yearlyData[rawKey]) : null;
+          });
+          return { metric, values };
+        });
+
+        return { years: sortedYears, metrics };
+      }
+
+      function metricExists(metrics, label) {
+        return metrics.some((m) => m.metric === label);
+      }
+
+      function pickTableMetrics(sectionKey, normalized) {
+        const preferred = (tableMetricPriority[sectionKey] || []).filter((m) => metricExists(normalized.metrics, m));
+        const extra = normalized.metrics
+          .filter((m) => !preferred.includes(m.metric))
+          .filter((m) => Object.values(m.values).some((v) => v !== null))
+          .slice(0, 16 - preferred.length)
+          .map((m) => m.metric);
+
+        return [...preferred, ...extra];
+      }
+
+      function createTableCard(title, sectionKey, normalized) {
+        const shownMetrics = pickTableMetrics(sectionKey, normalized);
+
+        const rows = shownMetrics.map((metric) => {
+          const metricData = normalized.metrics.find((m) => m.metric === metric);
+          const cells = normalized.years.map((year) => `<td>${formatIndianValue(metricData.values[year])}</td>`).join('');
+          return `<tr><td>${metric}</td>${cells}</tr>`;
+        }).join('');
+
+        return `
+          <div class="card table-card section">
+            <h3>${title}</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    ${normalized.years.map((y) => `<th>${y}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows || '<tr><td colspan="99">No statement rows available.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+
+      function getSeries(normalized, candidateNames) {
+        const target = normalized.metrics.find((m) => candidateNames.includes(m.metric));
+        if (!target) {
+          return { labels: normalized.years, values: normalized.years.map(() => null), metric: candidateNames[0] };
+        }
+        return { labels: normalized.years, values: normalized.years.map((y) => target.values[y]), metric: target.metric };
+      }
+
+      function renderHighlights(income, cashflow) {
+        const revenue = getSeries(income, ['Total Revenue']);
+        const netIncome = getSeries(income, ['Net Income']);
+        const ebitda = getSeries(income, ['EBITDA']);
+        const operatingCF = getSeries(cashflow, ['Operating Cash Flow']);
+
+        const latestIdx = revenue.labels.length - 1;
+
+        const cards = [
+          { label: 'Total Revenue', value: revenue.values[latestIdx] },
+          { label: 'Net Income', value: netIncome.values[latestIdx] },
+          { label: 'EBITDA', value: ebitda.values[latestIdx] },
+          { label: 'Operating Cash Flow', value: operatingCF.values[latestIdx] }
+        ];
+
+        highlightsNode.innerHTML = cards.map((card) => `
+          <div class="card metric-card">
+            <div class="metric-label">${card.label}</div>
+            <div class="metric-value">${formatIndianValue(card.value)}</div>
+          </div>
+        `).join('');
+      }
+
+      function renderLineChart(refKey, canvasId, label, labels, values, color) {
+        if (chartRefs[refKey]) {
+          chartRefs[refKey].destroy();
+        }
+
+        const ctx = document.getElementById(canvasId);
+        chartRefs[refKey] = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label,
+              data: values,
+              borderColor: color,
+              backgroundColor: color + '20',
+              pointRadius: 3,
+              tension: 0.2,
+              spanGaps: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: true },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => `${ctx.dataset.label}: ${formatIndianValue(ctx.parsed.y)}`
+                }
+              }
+            },
+            scales: {
+              y: {
+                ticks: {
+                  callback: (value) => formatIndianValue(value)
+                }
+              }
+            }
+          }
+        });
+      }
+
+      function renderDashboard(data) {
+        const income = normalizeSection(data.income_statement);
+        const balance = normalizeSection(data.balance_sheet);
+        const cashflow = normalizeSection(data.cash_flow_statement);
+
+        renderHighlights(income, cashflow);
+
+        const revenueSeries = getSeries(income, ['Total Revenue']);
+        const netIncomeSeries = getSeries(income, ['Net Income']);
+        const fcfSeries = getSeries(cashflow, ['Free Cash Flow']);
+
+        renderLineChart('revenue', 'revenueChart', revenueSeries.metric, revenueSeries.labels, revenueSeries.values, '#1f6feb');
+        renderLineChart('netIncome', 'netIncomeChart', netIncomeSeries.metric, netIncomeSeries.labels, netIncomeSeries.values, '#15803d');
+        renderLineChart('fcf', 'fcfChart', fcfSeries.metric, fcfSeries.labels, fcfSeries.values, '#7c3aed');
+
+        tablesNode.innerHTML = [
+          createTableCard('Income Statement', 'income_statement', income),
+          createTableCard('Balance Sheet', 'balance_sheet', balance),
+          createTableCard('Cash Flow Statement', 'cash_flow_statement', cashflow)
+        ].join('');
+      }
+
+      async function loadDashboard() {
+        const query = input.value.trim();
         if (!query) {
-          setStatus('Please enter a company name or ticker first.', true);
-          output.hidden = true;
+          setStatus('Please enter a ticker symbol.', 'error');
           return;
         }
 
         btn.disabled = true;
-        setStatus(`Fetching financial statements for "${query}"...`);
-        output.hidden = true;
+        setStatus(`Loading financial data for ${query}...`);
 
         try {
-          const res = await fetch(`${apiBaseUrl}/fetch-data`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query }),
-          });
+          const response = await fetch(`${API_ENDPOINT}?query=${encodeURIComponent(query)}`);
+          const contentType = response.headers.get('content-type') || '';
 
-          const contentType = res.headers.get('content-type') || '';
           if (!contentType.includes('application/json')) {
-            const text = await res.text();
-            throw new Error(
-              `Server returned non-JSON response (HTTP ${res.status}). ${text.slice(0, 120)}`
-            );
+            throw new Error(`Server returned invalid response (HTTP ${response.status}).`);
           }
 
-          const data = await res.json();
-
-          if (!res.ok) {
-            throw new Error(data.error || `HTTP ${res.status}`);
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || `Unable to fetch data (HTTP ${response.status}).`);
           }
 
-          output.textContent = JSON.stringify(data, null, 2);
-          output.hidden = false;
-          setStatus('Data fetched successfully.');
+          renderDashboard(data);
+          setStatus('Dashboard updated successfully.', 'ok');
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          if (message.includes('Failed to fetch')) {
-            setStatus(
-              `Cannot reach backend at ${apiBaseUrl}/fetch-data. If local, start Flask. If deployed, verify CORS and API URL.`,
-              true
-            );
-          } else {
-            setStatus(`Failed to fetch data: ${message}`, true);
-          }
-          output.hidden = true;
+          highlightsNode.innerHTML = '';
+          tablesNode.innerHTML = '';
+          setStatus(err instanceof Error ? err.message : 'Something went wrong while loading data.', 'error');
         } finally {
           btn.disabled = false;
         }
       }
 
-      btn.addEventListener('click', fetchData);
-      input.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          fetchData();
-        }
+      btn.addEventListener('click', loadDashboard);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') loadDashboard();
       });
 
-      if (form) {
-        form.addEventListener('submit', (event) => {
-          event.preventDefault();
-          fetchData();
-        });
-      }
-
-      if (window.location.protocol === 'file:') {
-        setStatus(
-          `This page must be opened from a server, not as a local file. Expected API base: ${apiBaseUrl}.`,
-          true
-        );
-      }
+      loadDashboard();
     </script>
   </body>
 </html>
