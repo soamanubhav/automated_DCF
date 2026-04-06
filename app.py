@@ -431,54 +431,113 @@ def _get_company_financials(ticker_symbol: str) -> dict[str, Any]:
     return fresh_data
 
 
-def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]) -> dict[str, Any]:
-    ticker_symbol = company_data["ticker"]
+def _series_latest_value(series: pd.Series, default: float = 0.0) -> float:
+    cleaned = pd.to_numeric(series, errors="coerce").replace([math.inf, -math.inf], pd.NA).dropna()
+    if cleaned.empty:
+        return default
+    return float(cleaned.iloc[-1])
+
+
+def _require_finite(name: str, value: float) -> None:
+    if value is None or not math.isfinite(value):
+        raise ValueError(f"{name} must be finite.")
+
+
+def _get_share_count(info: dict[str, Any]) -> float:
+    for field in ("sharesOutstanding", "floatShares", "impliedSharesOutstanding"):
+        shares = _safe_float(info.get(field))
+        if shares and shares > 0:
+            return shares
+    raise ValueError("Shares outstanding is unavailable for this ticker.")
+
+
+def _compute_operating_nwc(balance_sheet: pd.DataFrame, revenue_series: pd.Series) -> pd.Series:
+    receivables = _extract_series(balance_sheet, ["Accounts Receivable", "Receivables"])
+    inventory = _extract_series(balance_sheet, ["Inventory", "Inventories"])
+    payables = _extract_series(balance_sheet, ["Accounts Payable", "Payables"])
+    op_nwc = receivables.add(inventory, fill_value=0).subtract(payables, fill_value=0).dropna()
+    if not op_nwc.empty:
+        return op_nwc.sort_index()
+
+    current_assets_series = _extract_series(balance_sheet, ["Current Assets"])
+    current_liabilities_series = _extract_series(balance_sheet, ["Current Liabilities"])
+    nwc_series = current_assets_series.subtract(current_liabilities_series, fill_value=0)
+    if not nwc_series.empty:
+        return nwc_series.sort_index()
+
+    if revenue_series.empty:
+        return pd.Series(dtype="float64")
+    return revenue_series * 0.08
+
+
+def compute_assumptions(company_data: dict[str, Any], assumption_inputs: dict[str, Any]) -> tuple[dict[str, float], list[str], dict[str, Any]]:
     balance_sheet = company_data["balance_sheet"]
     income_statement = company_data["income_statement"]
-    cashflow_statement = company_data["cashflow_statement"]
-    info = company_data["info"]
+    info = company_data["info"] or {}
 
     revenue_series = _extract_series(income_statement, ["Total Revenue", "Operating Revenue"])
     ebit_series = _extract_series(income_statement, ["EBIT", "Operating Income"])
     tax_provision_series = _extract_series(income_statement, ["Tax Provision"])
     pretax_income_series = _extract_series(income_statement, ["Pretax Income"])
-    depreciation_series = _extract_series(cashflow_statement, ["Depreciation And Amortization", "Depreciation"])
-    capex_series = _extract_series(cashflow_statement, ["Capital Expenditure", "Purchase Of PPE"])
+    interest_expense_series = _extract_series(income_statement, ["Interest Expense", "InterestExpense"])
     ppe_series = _extract_series(balance_sheet, ["Property Plant Equipment", "Net PPE", "Gross PPE"])
-
-    current_assets_series = _extract_series(balance_sheet, ["Current Assets"])
-    current_liabilities_series = _extract_series(balance_sheet, ["Current Liabilities"])
-    nwc_series = current_assets_series.subtract(current_liabilities_series, fill_value=0)
+    op_nwc_series = _compute_operating_nwc(balance_sheet, revenue_series)
+    invested_capital_series = ppe_series.add(op_nwc_series, fill_value=0).dropna()
 
     if revenue_series.empty or ebit_series.empty:
         raise ValueError("Not enough revenue/EBIT data to build a DCF model.")
 
-    revenue_growth_default = _bounded(_average(_growth_rates(revenue_series)[-3:], 0.08), -0.2, 0.30)
+    aligned_margin = (ebit_series / revenue_series).replace([math.inf, -math.inf], pd.NA).dropna()
+    revenue_growth_default = _bounded(_average(_growth_rates(revenue_series)[-3:], 0.07), -0.2, 0.25)
+    ebit_margin_default = _bounded(_average(aligned_margin.tolist()[-3:], 0.18), 0.02, 0.55)
 
-    aligned_ebit_margin = (ebit_series / revenue_series).replace([math.inf, -math.inf], pd.NA).dropna()
-    ebit_margin_default = _bounded(_average(aligned_ebit_margin.tolist()[-3:], 0.18), 0.02, 0.50)
+    pretax_pos_mask = pretax_income_series > 0
+    tax_rate_series = (tax_provision_series[pretax_pos_mask] / pretax_income_series[pretax_pos_mask]).replace(
+        [math.inf, -math.inf], pd.NA
+    ).dropna()
+    tax_rate_default = _bounded(_average(tax_rate_series.tolist()[-3:], 0.25), 0.10, 0.35)
 
-    dep_rate_series = (depreciation_series.abs() / ppe_series.abs()).replace([math.inf, -math.inf], pd.NA).dropna()
-    depreciation_rate_default = _bounded(_average(dep_rate_series.tolist()[-3:], 0.04), 0.01, 0.15)
+    nopat_series = ebit_series * (1 - tax_rate_default)
+    invested_capital_avg = invested_capital_series.rolling(2).mean().dropna()
+    roic_series = (nopat_series / invested_capital_avg).replace([math.inf, -math.inf], pd.NA).dropna()
+    roic_default = _bounded(_average(roic_series.tolist()[-3:], 0.12), 0.06, 0.35)
+    terminal_roic_default = _bounded(roic_default * 0.85, 0.06, 0.20)
 
-    capex_percent_series = (capex_series.abs() / revenue_series.abs()).replace([math.inf, -math.inf], pd.NA).dropna()
-    capex_percent_default = _bounded(_average(capex_percent_series.tolist()[-3:], 0.06), 0.01, 0.20)
+    beta = _safe_float(info.get("beta")) or 1.0
+    risk_free_rate = _safe_float(info.get("riskFreeRate")) or 0.0425
+    equity_risk_premium = _safe_float(info.get("equityRiskPremium")) or 0.05
+    cost_of_equity_default = _bounded(risk_free_rate + beta * equity_risk_premium, 0.05, 0.20)
 
-    nwc_percent_series = (nwc_series / revenue_series).replace([math.inf, -math.inf], pd.NA).dropna()
-    nwc_percent_default = _bounded(_average(nwc_percent_series.tolist()[-3:], 0.08), 0.0, 0.25)
-
-    tax_rate_series = (tax_provision_series / pretax_income_series).replace([math.inf, -math.inf], pd.NA).dropna()
-    tax_rate_default = _bounded(_average(tax_rate_series.tolist()[-3:], 0.23), 0.10, 0.35)
+    debt_long = _series_latest_value(_extract_series(balance_sheet, ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"]))
+    debt_current = _series_latest_value(_extract_series(balance_sheet, ["Current Debt"]))
+    debt_value = max(debt_long + debt_current, 0.0)
+    interest_expense = abs(_series_latest_value(interest_expense_series, 0.0))
+    cost_of_debt_default = _bounded((interest_expense / debt_value) if debt_value > 0 else 0.06, 0.03, 0.15)
+    market_cap = _safe_float(info.get("marketCap")) or 0.0
+    total_capital = market_cap + debt_value
+    if total_capital > 0:
+        weight_equity = market_cap / total_capital
+        weight_debt = debt_value / total_capital
+        wacc_default = (weight_equity * cost_of_equity_default) + (weight_debt * cost_of_debt_default * (1 - tax_rate_default))
+    else:
+        wacc_default = 0.10
+    wacc_default = _bounded(wacc_default, 0.05, 0.20)
 
     defaults = {
         "revenue_growth_rate": revenue_growth_default,
-        "ebit_margin": ebit_margin_default,
-        "depreciation_rate": depreciation_rate_default,
-        "capex_percent": capex_percent_default,
-        "nwc_percent": nwc_percent_default,
-        "wacc": 0.10,
         "terminal_growth_rate": 0.03,
+        "ebit_margin": ebit_margin_default,
+        "terminal_ebit_margin": _bounded(ebit_margin_default * 0.9, 0.02, 0.45),
         "tax_rate": tax_rate_default,
+        "roic": roic_default,
+        "terminal_roic": terminal_roic_default,
+        "wacc": wacc_default,
+        "cost_of_equity": cost_of_equity_default,
+        "cost_of_debt": cost_of_debt_default,
+        # Backward-compatible assumption fields retained:
+        "depreciation_rate": 0.0,
+        "capex_percent": 0.0,
+        "nwc_percent": 0.0,
     }
 
     assumptions: dict[str, float] = {}
@@ -491,44 +550,75 @@ def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]
         else:
             assumptions[key] = provided
 
-    assumptions["wacc"] = _bounded(assumptions["wacc"], 0.03, 0.30)
-    assumptions["terminal_growth_rate"] = _bounded(assumptions["terminal_growth_rate"], 0.0, 0.06)
-    assumptions["revenue_growth_rate"] = _bounded(assumptions["revenue_growth_rate"], -0.2, 0.35)
-    assumptions["ebit_margin"] = _bounded(assumptions["ebit_margin"], 0.01, 0.60)
-    assumptions["depreciation_rate"] = _bounded(assumptions["depreciation_rate"], 0.0, 0.25)
-    assumptions["capex_percent"] = _bounded(assumptions["capex_percent"], 0.0, 0.35)
-    assumptions["nwc_percent"] = _bounded(assumptions["nwc_percent"], -0.10, 0.35)
-    assumptions["tax_rate"] = _bounded(assumptions["tax_rate"], 0.0, 0.45)
+    assumptions["tax_rate"] = _bounded(assumptions["tax_rate"], 0.10, 0.35)
+    assumptions["revenue_growth_rate"] = _bounded(assumptions["revenue_growth_rate"], -0.2, 0.30)
+    assumptions["terminal_growth_rate"] = _bounded(assumptions["terminal_growth_rate"], 0.0, 0.045)
+    assumptions["ebit_margin"] = _bounded(assumptions["ebit_margin"], 0.01, 0.65)
+    assumptions["terminal_ebit_margin"] = _bounded(assumptions["terminal_ebit_margin"], 0.01, 0.50)
+    assumptions["roic"] = _bounded(assumptions["roic"], 0.05, 0.50)
+    assumptions["terminal_roic"] = _bounded(assumptions["terminal_roic"], 0.05, 0.30)
+    assumptions["wacc"] = _bounded(assumptions["wacc"], 0.04, 0.30)
+    assumptions["cost_of_equity"] = _bounded(assumptions["cost_of_equity"], 0.04, 0.30)
+    assumptions["cost_of_debt"] = _bounded(assumptions["cost_of_debt"], 0.02, 0.20)
 
     if assumptions["wacc"] <= assumptions["terminal_growth_rate"]:
         raise ValueError("WACC must be greater than terminal growth rate.")
 
-    revenue = float(revenue_series.iloc[-1])
-    opening_ppe = float(ppe_series.iloc[-1]) if not ppe_series.empty else revenue * 0.5
+    shares = _get_share_count(info)
+    if shares <= 0:
+        raise ValueError("Shares outstanding must be greater than zero.")
 
-    historical_nwc = nwc_series.dropna()
-    previous_nwc = float(historical_nwc.iloc[-1]) if not historical_nwc.empty else revenue * assumptions["nwc_percent"]
+    context = {
+        "revenue_last": _series_latest_value(revenue_series),
+        "ebit_last": _series_latest_value(ebit_series),
+        "invested_capital_last": _series_latest_value(invested_capital_series, _series_latest_value(revenue_series) * 0.5),
+        "cash": _series_latest_value(
+            _extract_series(balance_sheet, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"])
+        ),
+        "debt": debt_value,
+        "shares": shares,
+    }
+    _require_finite("Revenue", context["revenue_last"])
+    _require_finite("EBIT", context["ebit_last"])
+    _require_finite("Invested capital", context["invested_capital_last"])
+    return assumptions, defaulted_fields, context
 
+
+def project_cashflows(assumptions: dict[str, float], context: dict[str, Any]) -> tuple[list[dict[str, float]], float, float, float]:
+    revenue = context["revenue_last"]
+    invested_capital = max(context["invested_capital_last"], 1.0)
+    pv_fcff_sum = 0.0
     forecast_rows: list[dict[str, float]] = []
-    pv_fcff_total = 0.0
 
-    for year in range(1, FORECAST_YEARS + 1):
-        revenue = revenue * (1 + assumptions["revenue_growth_rate"])
-        ebit = revenue * assumptions["ebit_margin"]
+    for year in range(1, 11):
+        if year <= 5:
+            growth = assumptions["revenue_growth_rate"]
+            margin = assumptions["ebit_margin"]
+            roic = assumptions["roic"]
+        else:
+            fade = (year - 5) / 5.0
+            growth = assumptions["revenue_growth_rate"] + fade * (assumptions["terminal_growth_rate"] - assumptions["revenue_growth_rate"])
+            margin = assumptions["ebit_margin"] + fade * (
+                assumptions["terminal_ebit_margin"] - assumptions["ebit_margin"]
+            )
+            roic = assumptions["roic"] + fade * (assumptions["terminal_roic"] - assumptions["roic"])
+
+        growth = _bounded(growth, -0.2, 0.30)
+        margin = _bounded(margin, 0.01, 0.65)
+        roic = _bounded(roic, 0.05, 0.50)
+
+        revenue = revenue * (1 + growth)
+        ebit = revenue * margin
         nopat = ebit * (1 - assumptions["tax_rate"])
+        reinvestment_rate = _bounded(growth / roic if roic > 0 else 0.0, 0.0, 0.90)
+        reinvestment = nopat * reinvestment_rate
+        invested_capital += reinvestment
+        fcff = nopat - reinvestment
 
-        depreciation = opening_ppe * assumptions["depreciation_rate"]
-        capex = revenue * assumptions["capex_percent"]
-        closing_ppe = opening_ppe + capex - depreciation
-
-        nwc = revenue * assumptions["nwc_percent"]
-        delta_nwc = nwc - previous_nwc
-        previous_nwc = nwc
-
-        fcff = nopat + depreciation - capex - delta_nwc
+        _require_finite("FCFF", fcff)
         discount_factor = (1 + assumptions["wacc"]) ** year
         pv_fcff = fcff / discount_factor
-        pv_fcff_total += pv_fcff
+        pv_fcff_sum += pv_fcff
 
         forecast_rows.append(
             {
@@ -536,70 +626,171 @@ def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]
                 "revenue": revenue,
                 "ebit": ebit,
                 "nopat": nopat,
-                "depreciation": depreciation,
-                "capex": capex,
-                "opening_ppe": opening_ppe,
-                "closing_ppe": closing_ppe,
-                "nwc": nwc,
-                "delta_nwc": delta_nwc,
+                "reinvestment": reinvestment,
+                "reinvestment_rate": reinvestment_rate,
+                "invested_capital": invested_capital,
+                "roic": roic,
+                "depreciation": 0.0,
+                "capex": reinvestment,
+                "nwc": 0.0,
+                "delta_nwc": 0.0,
                 "fcff": fcff,
                 "discount_factor": discount_factor,
                 "pv_fcff": pv_fcff,
             }
         )
 
-        opening_ppe = closing_ppe
+    terminal_growth = min(assumptions["terminal_growth_rate"], 0.045)
+    terminal_roic = max(assumptions["terminal_roic"], 0.05)
+    terminal_reinvestment_rate = _bounded(terminal_growth / terminal_roic, 0.0, 0.80)
+    terminal_fcff = forecast_rows[-1]["nopat"] * (1 - terminal_reinvestment_rate)
+    _require_finite("Terminal FCFF", terminal_fcff)
+    return forecast_rows, pv_fcff_sum, terminal_fcff, terminal_reinvestment_rate
 
-    final_fcff = forecast_rows[-1]["fcff"]
-    terminal_value = final_fcff * (1 + assumptions["terminal_growth_rate"]) / (
-        assumptions["wacc"] - assumptions["terminal_growth_rate"]
-    )
-    discounted_terminal = terminal_value / ((1 + assumptions["wacc"]) ** FORECAST_YEARS)
 
-    enterprise_value = pv_fcff_total + discounted_terminal
+def compute_terminal_value(assumptions: dict[str, float], terminal_fcff: float) -> tuple[float, float]:
+    terminal_growth = min(assumptions["terminal_growth_rate"], 0.045)
+    if assumptions["wacc"] <= terminal_growth:
+        raise ValueError("WACC must be greater than terminal growth rate.")
+    terminal_value = terminal_fcff * (1 + terminal_growth) / (assumptions["wacc"] - terminal_growth)
+    discounted_terminal = terminal_value / ((1 + assumptions["wacc"]) ** 10)
+    _require_finite("Terminal value", terminal_value)
+    _require_finite("Discounted terminal value", discounted_terminal)
+    return terminal_value, discounted_terminal
 
-    cash_series = _extract_series(balance_sheet, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"])
-    debt_long_series = _extract_series(balance_sheet, ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"])
-    debt_current_series = _extract_series(balance_sheet, ["Current Debt"])
 
-    cash = float(cash_series.iloc[-1]) if not cash_series.empty else 0.0
-    debt = 0.0
-    if not debt_long_series.empty:
-        debt += float(debt_long_series.iloc[-1])
-    if not debt_current_series.empty:
-        debt += float(debt_current_series.iloc[-1])
-
-    equity_value = enterprise_value + cash - debt
-
-    shares = float(info.get("sharesOutstanding") or 0)
+def compute_valuation(context: dict[str, Any], pv_fcff_sum: float, terminal_value: float, discounted_terminal: float) -> dict[str, float]:
+    enterprise_value = pv_fcff_sum + discounted_terminal
+    equity_value = enterprise_value + context["cash"] - context["debt"]
+    shares = context["shares"]
     if shares <= 0:
-        shares = 1.0
-
+        raise ValueError("Shares outstanding must be greater than zero.")
     price_per_share = equity_value / shares
+    _require_finite("Enterprise value", enterprise_value)
+    _require_finite("Equity value", equity_value)
+    _require_finite("Price", price_per_share)
+    return {
+        "pv_fcff_sum": pv_fcff_sum,
+        "terminal_value": terminal_value,
+        "discounted_terminal_value": discounted_terminal,
+        "enterprise_value": enterprise_value,
+        "cash": context["cash"],
+        "debt": context["debt"],
+        "equity_value": equity_value,
+        "shares_outstanding": shares,
+        "intrinsic_price_per_share": price_per_share,
+    }
 
-    sensitivity = _build_sensitivity(
-        base_fcff=final_fcff,
-        base_wacc=assumptions["wacc"],
-        base_terminal_growth=assumptions["terminal_growth_rate"],
-        discount_t=FORECAST_YEARS,
-        present_value_sum=pv_fcff_total,
+
+def run_dcf_with_overrides(
+    company_data: dict[str, Any], base_assumptions: dict[str, float], overrides: dict[str, float]
+) -> dict[str, float] | None:
+    assumptions = {**base_assumptions, **overrides}
+    if assumptions["wacc"] <= assumptions["terminal_growth_rate"]:
+        return None
+    _, _, context = compute_assumptions(company_data, assumptions)
+    forecast_rows, pv_fcff_sum, terminal_fcff, _ = project_cashflows(assumptions, context)
+    terminal_value, discounted_terminal = compute_terminal_value(assumptions, terminal_fcff)
+    valuation = compute_valuation(context, pv_fcff_sum, terminal_value, discounted_terminal)
+    valuation["final_fcff"] = forecast_rows[-1]["fcff"]
+    return valuation
+
+
+def build_sensitivity(company_data: dict[str, Any], assumptions: dict[str, float]) -> dict[str, Any]:
+    wacc_axis = [round(max(0.04, assumptions["wacc"] + step), 4) for step in [-0.01, -0.005, 0, 0.005, 0.01]]
+    growth_axis = [round(max(0.0, min(0.045, assumptions["terminal_growth_rate"] + step)), 4) for step in [-0.01, -0.005, 0, 0.005, 0.01]]
+    margin_axis = [round(max(0.01, min(0.60, assumptions["ebit_margin"] + step)), 4) for step in [-0.05, -0.025, 0, 0.025, 0.05]]
+    high_growth_axis = [
+        round(max(-0.2, min(0.30, assumptions["revenue_growth_rate"] + step)), 4) for step in [-0.03, -0.015, 0, 0.015, 0.03]
+    ]
+
+    def build_matrices(row_axis: list[float], col_axis: list[float], build_override) -> tuple[list[list[Any]], list[list[Any]], list[list[Any]]]:
+        ev_matrix: list[list[Any]] = []
+        eq_matrix: list[list[Any]] = []
+        px_matrix: list[list[Any]] = []
+        for row_value in row_axis:
+            ev_row: list[Any] = []
+            eq_row: list[Any] = []
+            px_row: list[Any] = []
+            for col_value in col_axis:
+                result = run_dcf_with_overrides(company_data, assumptions, build_override(row_value, col_value))
+                if result is None:
+                    ev_row.append(None)
+                    eq_row.append(None)
+                    px_row.append(None)
+                else:
+                    ev_row.append(round(result["enterprise_value"], 2))
+                    eq_row.append(round(result["equity_value"], 2))
+                    px_row.append(round(result["intrinsic_price_per_share"], 2))
+            ev_matrix.append(ev_row)
+            eq_matrix.append(eq_row)
+            px_matrix.append(px_row)
+        return ev_matrix, eq_matrix, px_matrix
+
+    wg_ev, wg_eq, wg_px = build_matrices(
+        growth_axis,
+        wacc_axis,
+        lambda growth, wacc: {"terminal_growth_rate": growth, "wacc": wacc},
     )
+    gm_ev, gm_eq, gm_px = build_matrices(
+        high_growth_axis,
+        margin_axis,
+        lambda growth, margin: {"revenue_growth_rate": growth, "ebit_margin": margin},
+    )
+
+    return {
+        "wacc_growth": {
+            "wacc_axis": wacc_axis,
+            "growth_axis": growth_axis,
+            "enterprise_value": wg_ev,
+            "equity_value": wg_eq,
+            "price": wg_px,
+        },
+        "growth_margin": {
+            "growth_axis": high_growth_axis,
+            "margin_axis": margin_axis,
+            "enterprise_value": gm_ev,
+            "equity_value": gm_eq,
+            "price": gm_px,
+        },
+        # Legacy shape for backward compatibility
+        "wacc_axis": wacc_axis,
+        "growth_axis": growth_axis,
+        "enterprise_value_matrix": wg_ev,
+    }
+
+
+def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]) -> dict[str, Any]:
+    ticker_symbol = company_data["ticker"]
+    balance_sheet = company_data["balance_sheet"]
+    income_statement = company_data["income_statement"]
+    cashflow_statement = company_data["cashflow_statement"]
+
+    assumptions, defaulted_fields, context = compute_assumptions(company_data, assumption_inputs)
+    forecast_rows, pv_fcff_sum, terminal_fcff, terminal_reinvestment_rate = project_cashflows(assumptions, context)
+    terminal_value, discounted_terminal = compute_terminal_value(assumptions, terminal_fcff)
+    valuation = compute_valuation(context, pv_fcff_sum, terminal_value, discounted_terminal)
+
+    sanity = {
+        "ev_to_ebit": valuation["enterprise_value"] / max(abs(context["ebit_last"]), 1e-9),
+        "terminal_value_percent_of_ev": (valuation["discounted_terminal_value"] / valuation["enterprise_value"])
+        if valuation["enterprise_value"] != 0
+        else None,
+        "implied_growth": assumptions["terminal_growth_rate"],
+    }
+
+    sensitivity = build_sensitivity(company_data, assumptions)
 
     return {
         "query": ticker_symbol,
         "assumptions": assumptions,
         "defaulted_fields": defaulted_fields,
         "forecast": _sanitize_json_value(forecast_rows),
-        "valuation": {
-            "pv_fcff_sum": pv_fcff_total,
-            "terminal_value": terminal_value,
-            "discounted_terminal_value": discounted_terminal,
-            "enterprise_value": enterprise_value,
-            "cash": cash,
-            "debt": debt,
-            "equity_value": equity_value,
-            "shares_outstanding": shares,
-            "intrinsic_price_per_share": price_per_share,
+        "valuation": valuation,
+        "sanity_checks": _sanitize_json_value(sanity),
+        "terminal": {
+            "fcff_terminal": terminal_fcff,
+            "terminal_reinvestment_rate": terminal_reinvestment_rate,
         },
         "sensitivity": sensitivity,
         "source_data": {
