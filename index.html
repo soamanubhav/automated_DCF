@@ -2,87 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Company Data Fetcher</title>
-
-  <style>
-    body {
-      font-family: Arial;
-      background: #f6f7fb;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-
-    .card {
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      width: 400px;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-    }
-
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-    }
-
-    pre {
-      margin-top: 15px;
-      max-height: 300px;
-      overflow: auto;
-      background: #eee;
-      padding: 10px;
-      font-size: 12px;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Financial Analysis & DCF Valuation Tool</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
-  <div class="card">
-    <h3>Financial Data Fetcher</h3>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <h1 class="brand">Automated DCF</h1>
 
-    <input id="ticker" placeholder="RELIANCE.NS / AAPL" />
-    <button id="fetch-btn">Fetch Data</button>
+      <label class="field-label" for="ticker">Company Ticker</label>
+      <input id="ticker" class="ticker-input" placeholder="AAPL / MSFT / RELIANCE.NS" />
 
-    <pre id="output"></pre>
+      <div id="control-panel" class="control-panel"></div>
+
+      <button id="fetch-btn" class="fetch-btn">Get Data</button>
+    </aside>
+
+    <main class="main">
+      <header class="main-header">
+        <h2>Financial Analysis &amp; DCF Valuation Tool</h2>
+        <div id="query-chip" class="query-chip"></div>
+      </header>
+
+      <div id="tabs" class="tabs"></div>
+
+      <section id="statement-area" class="section statement-area"></section>
+
+      <section class="section">
+        <h3>DCF Valuation</h3>
+        <div id="valuation-cards" class="valuation-cards"></div>
+      </section>
+
+      <section class="section chart-grid">
+        <div class="chart-card">
+          <h3>Revenue Projection</h3>
+          <div id="revenue-chart" class="mini-chart"></div>
+        </div>
+        <div class="chart-card">
+          <h3>FCFF Projection</h3>
+          <div id="fcff-chart" class="mini-chart line"></div>
+        </div>
+        <div class="chart-card sensitivity">
+          <h3>Sensitivity Analysis</h3>
+          <p class="muted">WACC vs Terminal Growth</p>
+          <div id="sensitivity-table"></div>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <script>
-    const btn = document.getElementById("fetch-btn");
-    const input = document.getElementById("ticker");
-    const output = document.getElementById("output");
-
-    btn.addEventListener("click", async () => {
-      const query = input.value.trim();
-
-      if (!query) {
-        alert("Enter ticker");
-        return;
-      }
-
-      output.textContent = "Loading...";
-
-      try {
-        const res = await fetch(
-          `https://automated-dcf.onrender.com/fetch-data?query=${encodeURIComponent(query)}`
-        );
-
-        const data = await res.json();
-
-        if (data.error) {
-          output.textContent = "❌ " + data.error;
-        } else {
-          output.textContent = JSON.stringify(data, null, 2);
-        }
-
-      } catch (err) {
-        output.textContent = "❌ Cannot reach backend";
-        console.error(err);
-      }
-    });
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>

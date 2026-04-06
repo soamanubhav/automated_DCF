@@ -4,12 +4,12 @@ import math
 import os
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_cors import CORS
 import pandas as pd
 import yfinance as yf
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=".")
 
 CORS(app, resources={r"/*": {"origins": "*"}}, methods=["GET", "POST", "OPTIONS"])
 
@@ -56,6 +56,16 @@ def _frame_to_dict(frame: Any) -> dict[str, dict[str, Any]]:
 @app.get("/")
 def index() -> str:
     return render_template("index.html")
+
+
+@app.get("/styles.css")
+def styles() -> Any:
+    return send_from_directory(".", "styles.css")
+
+
+@app.get("/script.js")
+def script() -> Any:
+    return send_from_directory(".", "script.js")
 
 
 @app.route("/fetch-data", methods=["GET", "POST"])
