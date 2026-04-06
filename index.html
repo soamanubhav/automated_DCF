@@ -3,26 +3,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Company Data Fetcher</title>
+  <title>Automated DCF Dashboard</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-
 <body>
   <div class="page">
     <div class="card">
-      <h3 class="title">Financial Data Fetcher</h3>
-      <p class="subtitle">Fetch and explore Income Statement, Balance Sheet, and Cash Flow in separate tabs.</p>
+      <h1 class="title">Discounted Cash Flow Dashboard</h1>
+      <p class="subtitle">Revenue → EBIT → NOPAT → FCFF → EV → Equity Value → Intrinsic Price</p>
 
-      <div class="controls">
-        <input id="ticker" placeholder="Try RELIANCE.NS / AAPL / MSFT" />
-        <button id="fetch-btn">Fetch Data</button>
-      </div>
+      <section class="panel assumptions-panel">
+        <div class="controls two-col">
+          <label>Ticker <input id="ticker" placeholder="AAPL / MSFT / GOOGL" /></label>
+          <label>Revenue Growth Rate <input id="revenue_growth_rate" type="number" step="0.001" placeholder="0.08" /></label>
+          <label>EBIT Margin <input id="ebit_margin" type="number" step="0.001" placeholder="0.18" /></label>
+          <label>Depreciation Rate <input id="depreciation_rate" type="number" step="0.001" placeholder="0.04" /></label>
+          <label>Capex % Revenue <input id="capex_percent" type="number" step="0.001" placeholder="0.06" /></label>
+          <label>NWC % Revenue <input id="nwc_percent" type="number" step="0.001" placeholder="0.08" /></label>
+          <label>WACC <input id="wacc" type="number" step="0.001" placeholder="0.10" /></label>
+          <label>Terminal Growth Rate <input id="terminal_growth_rate" type="number" step="0.001" placeholder="0.03" /></label>
+          <label>Tax Rate <input id="tax_rate" type="number" step="0.001" placeholder="0.23" /></label>
+        </div>
+        <div class="actions">
+          <button id="run-btn">Run DCF Model</button>
+        </div>
+      </section>
 
-      <div id="query-chip" class="query-chip"></div>
-      <div id="tabs" class="tabs"></div>
-      <div id="output" class="output">
-        <div class="empty-state">Enter a ticker and click <strong>Fetch Data</strong> to view statements.</div>
-      </div>
+      <div id="status" class="status">Enter ticker + optional assumptions, then run DCF.</div>
+      <div id="defaults-chip" class="defaults-chip hidden"></div>
+
+      <section id="summary" class="panel hidden"></section>
+      <section id="charts" class="panel hidden">
+        <h2>Revenue, EBIT & FCFF Projection</h2>
+        <canvas id="forecast-chart" height="120"></canvas>
+      </section>
+      <section id="forecast" class="panel hidden"></section>
+      <section id="sensitivity" class="panel hidden"></section>
+      <section id="statements" class="panel hidden"></section>
     </div>
   </div>
 

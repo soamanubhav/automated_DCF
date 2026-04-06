@@ -1,313 +1,355 @@
-const btn = document.getElementById("fetch-btn");
-const input = document.getElementById("ticker");
-const output = document.getElementById("output");
-const tabs = document.getElementById("tabs");
-const queryChip = document.getElementById("query-chip");
+const runBtn = document.getElementById("run-btn");
+const tickerInput = document.getElementById("ticker");
+const statusEl = document.getElementById("status");
+const defaultsChip = document.getElementById("defaults-chip");
 
-const SECTIONS = [
-  ["balance_sheet", "Balance Sheet"],
-  ["income_statement", "Income Statement"],
-  ["cash_flow_statement", "Cash Flow"],
+const summaryEl = document.getElementById("summary");
+const chartsEl = document.getElementById("charts");
+const forecastEl = document.getElementById("forecast");
+const sensitivityEl = document.getElementById("sensitivity");
+const statementsEl = document.getElementById("statements");
+
+const ASSUMPTION_FIELDS = [
+  "revenue_growth_rate",
+  "ebit_margin",
+  "depreciation_rate",
+  "capex_percent",
+  "nwc_percent",
+  "wacc",
+  "terminal_growth_rate",
+  "tax_rate",
 ];
 
-const ROW_ORDER = {
-  balance_sheet: [
-    "Total Assets",
-    "Current Assets",
-    "Cash And Cash Equivalents",
-    "Cash Cash Equivalents And Short Term Investments",
-    "Other Short Term Investments",
-    "Net Receivables",
-    "Inventory",
-    "Other Current Assets",
-    "Total Non Current Assets",
-    "Property Plant Equipment",
-    "Gross PPE",
-    "Accumulated Depreciation",
-    "Goodwill",
-    "Intangible Assets",
-    "Investments And Advances",
-    "Other Non Current Assets",
-    "Total Liabilities Net Minority Interest",
-    "Current Liabilities",
-    "Payables",
-    "Current Debt",
-    "Current Deferred Liabilities",
-    "Other Current Liabilities",
-    "Total Non Current Liabilities Net Minority Interest",
-    "Long Term Debt",
-    "Long Term Debt And Capital Lease Obligation",
-    "Non Current Deferred Liabilities",
-    "Other Non Current Liabilities",
-    "Stockholders Equity",
-    "Total Equity Gross Minority Interest",
-    "Common Stock Equity",
-    "Retained Earnings",
-    "Gains Losses Not Affecting Retained Earnings",
-    "Other Equity Adjustments",
-    "Total Capitalization",
-    "Working Capital",
-    "Net Tangible Assets",
-    "Invested Capital",
-    "Tangible Book Value",
-  ],
-  income_statement: [
-    "Total Revenue",
-    "Operating Revenue",
-    "Cost Of Revenue",
-    "Gross Profit",
-    "Operating Expense",
-    "Research And Development",
-    "Selling General And Administration",
-    "General And Administrative Expense",
-    "Selling And Marketing Expense",
-    "Operating Income",
-    "Operating Margin",
-    "EBIT",
-    "EBITDA",
-    "Interest Income",
-    "Interest Expense",
-    "Pretax Income",
-    "Tax Provision",
-    "Net Income",
-    "Net Income Common Stockholders",
-    "Diluted NI Availto Com Stockholders",
-    "Basic EPS",
-    "Diluted EPS",
-    "Basic Average Shares",
-    "Diluted Average Shares",
-    "Normalized Income",
-  ],
-  cash_flow_statement: [
-    "Operating Cash Flow",
-    "Cash Flow From Continuing Operating Activities",
-    "Net Income From Continuing Operations",
-    "Depreciation And Amortization",
-    "Deferred Tax",
-    "Stock Based Compensation",
-    "Change In Working Capital",
-    "Changes In Receivables",
-    "Changes In Inventory",
-    "Changes In Payables And Accrued Expense",
-    "Other Non Cash Items",
-    "Investing Cash Flow",
-    "Cash Flow From Continuing Investing Activities",
-    "Capital Expenditure",
-    "Purchase Of PPE",
-    "Sale Of PPE",
-    "Net Business Purchase And Sale",
-    "Purchase Of Investment",
-    "Sale Of Investment",
-    "Financing Cash Flow",
-    "Cash Flow From Continuing Financing Activities",
-    "Net Long Term Debt Issuance",
-    "Long Term Debt Issuance",
-    "Long Term Debt Payments",
-    "Cash Dividends Paid",
-    "Common Stock Issuance",
-    "Common Stock Payments",
-    "Repurchase Of Capital Stock",
-    "Net Other Financing Charges",
-    "End Cash Position",
-    "Beginning Cash Position",
-    "Changes In Cash",
-    "Effect Of Exchange Rate Changes",
-    "Free Cash Flow",
-  ],
-};
+const STATEMENT_TABS = [
+  ["balance_sheet", "Balance Sheet"],
+  ["income_statement", "Income Statement"],
+  ["cash_flow_statement", "Cash Flow Statement"],
+];
 
-function formatValue(value) {
-  if (value === null || value === undefined) return "-";
-  if (typeof value === "number") return value.toLocaleString();
-  return String(value);
-}
+let forecastChart;
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function sortColumns(columns) {
-  return columns.sort((left, right) => {
-    const leftDate = Date.parse(left);
-    const rightDate = Date.parse(right);
-    const leftIsDate = !Number.isNaN(leftDate);
-    const rightIsDate = !Number.isNaN(rightDate);
-
-    if (leftIsDate && rightIsDate) return rightDate - leftDate;
-    if (left === "TTM") return -1;
-    if (right === "TTM") return 1;
-    return left.localeCompare(right);
+function formatNumber(value, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  return Number(value).toLocaleString(undefined, {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
   });
 }
 
-function buildTable(statementData, sectionKey) {
-  const title = SECTIONS.find(([key]) => key === sectionKey)?.[1] || sectionKey;
-  const rows = orderRows(Object.keys(statementData || {}), sectionKey);
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  return `${(Number(value) * 100).toFixed(2)}%`;
+}
 
-  if (!rows.length) {
-    return `
-      <div class="statement-group">
-        <h4 class="statement-head">${escapeHtml(title)}</h4>
-        <div class="empty-state">No data found for this statement.</div>
-      </div>
-    `;
+function formatMoney(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  return `$${formatNumber(value, 2)}`;
+}
+
+function collectAssumptions() {
+  const assumptions = {};
+  ASSUMPTION_FIELDS.forEach((field) => {
+    const value = document.getElementById(field).value.trim();
+    if (value !== "") assumptions[field] = Number(value);
+  });
+  return assumptions;
+}
+
+function showPanels() {
+  [summaryEl, chartsEl, forecastEl, sensitivityEl, statementsEl].forEach((el) => el.classList.remove("hidden"));
+}
+
+function setStatus(message, isError = false) {
+  statusEl.classList.toggle("error", isError);
+  statusEl.textContent = message;
+}
+
+function resetPanels() {
+  [summaryEl, forecastEl, sensitivityEl, statementsEl].forEach((el) => {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+  });
+  chartsEl.classList.add("hidden");
+  defaultsChip.classList.add("hidden");
+  defaultsChip.textContent = "";
+}
+
+function renderDefaultsChip(defaultedFields, assumptions) {
+  if (!defaultedFields?.length) {
+    defaultsChip.classList.add("hidden");
+    defaultsChip.textContent = "";
+    return;
   }
 
-  const columnSet = new Set();
-  for (const rowName of rows) {
-    const row = statementData[rowName] || {};
-    Object.keys(row).forEach((col) => columnSet.add(col));
-  }
+  const items = defaultedFields
+    .map((key) => `${key}: ${key.includes("rate") || key.includes("margin") || key.includes("percent") || key === "wacc" ? formatPercent(assumptions[key]) : formatNumber(assumptions[key])}`)
+    .join(" | ");
 
-  const columns = sortColumns(Array.from(columnSet));
+  defaultsChip.textContent = `Default assumptions applied for blank fields: ${items}`;
+  defaultsChip.classList.remove("hidden");
+}
 
-  const headerCells = [`<th>Breakdown</th>`]
-    .concat(columns.map((col) => `<th>${escapeHtml(col)}</th>`))
-    .join("");
+function buildSummary(query, assumptions, valuation) {
+  summaryEl.innerHTML = `
+    <h2>Valuation Summary – ${query}</h2>
+    <div class="summary-grid">
+      <div><strong>Present Value of FCFF</strong><span>${formatMoney(valuation.pv_fcff_sum)}</span></div>
+      <div><strong>Terminal Value (PV)</strong><span>${formatMoney(valuation.discounted_terminal_value)}</span></div>
+      <div><strong>Enterprise Value (EV)</strong><span>${formatMoney(valuation.enterprise_value)}</span></div>
+      <div><strong>Less: Net Debt</strong><span>${formatMoney(valuation.debt - valuation.cash)}</span></div>
+      <div><strong>Equity Value</strong><span>${formatMoney(valuation.equity_value)}</span></div>
+      <div><strong>Intrinsic Share Price</strong><span>${formatMoney(valuation.intrinsic_price_per_share)}</span></div>
+      <div><strong>WACC</strong><span>${formatPercent(assumptions.wacc)}</span></div>
+      <div><strong>Terminal Growth</strong><span>${formatPercent(assumptions.terminal_growth_rate)}</span></div>
+    </div>
 
-  const bodyRows = rows
-    .map((rowName) => {
-      const row = statementData[rowName] || {};
-      const dataCells = columns
-        .map((col) => `<td>${escapeHtml(formatValue(row[col]))}</td>`)
-        .join("");
-      return `<tr><td>${escapeHtml(rowName)}</td>${dataCells}</tr>`;
-    })
-    .join("");
-
-  return `
-    <div class="statement-group">
-      <h4 class="statement-head">${escapeHtml(title)}</h4>
+    <div class="table-wrap mt12">
       <table>
-        <thead><tr>${headerCells}</tr></thead>
-        <tbody>${bodyRows}</tbody>
+        <thead>
+          <tr><th>Metric</th><th>Value</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>PV of FCFF</td><td>${formatMoney(valuation.pv_fcff_sum)}</td></tr>
+          <tr><td>Terminal Value</td><td>${formatMoney(valuation.terminal_value)}</td></tr>
+          <tr><td>Discounted Terminal Value</td><td>${formatMoney(valuation.discounted_terminal_value)}</td></tr>
+          <tr><td>Enterprise Value</td><td>${formatMoney(valuation.enterprise_value)}</td></tr>
+          <tr><td>Cash</td><td>${formatMoney(valuation.cash)}</td></tr>
+          <tr><td>Debt</td><td>${formatMoney(valuation.debt)}</td></tr>
+          <tr><td>Equity Value</td><td>${formatMoney(valuation.equity_value)}</td></tr>
+          <tr><td>Shares Outstanding</td><td>${formatNumber(valuation.shares_outstanding, 0)}</td></tr>
+          <tr><td>Intrinsic Share Price</td><td>${formatMoney(valuation.intrinsic_price_per_share)}</td></tr>
+        </tbody>
       </table>
     </div>
   `;
 }
 
-function normalizeKey(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]/g, "");
-}
-
-function orderRows(rows, sectionKey) {
-  const preferredOrder = ROW_ORDER[sectionKey] || [];
-
-  if (!preferredOrder.length) return rows;
-
-  const preferredMap = new Map(
-    preferredOrder.map((label, index) => [normalizeKey(label), index])
-  );
-
-  return [...rows].sort((left, right) => {
-    const leftRank = preferredMap.get(normalizeKey(left));
-    const rightRank = preferredMap.get(normalizeKey(right));
-
-    const leftMatched = leftRank !== undefined;
-    const rightMatched = rightRank !== undefined;
-
-    if (leftMatched && rightMatched) return leftRank - rightRank;
-    if (leftMatched) return -1;
-    if (rightMatched) return 1;
-    return left.localeCompare(right);
-  });
-}
-
-function activateTab(tabName) {
-  document.querySelectorAll(".tab-btn").forEach((tabButton) => {
-    tabButton.classList.toggle("active", tabButton.dataset.tab === tabName);
-  });
-
-  document.querySelectorAll(".statement").forEach((panel) => {
-    panel.classList.toggle("active", panel.dataset.tab === tabName);
-  });
-}
-
-function renderTabs() {
-  const tabDefinitions = [["all", "All Statements"], ...SECTIONS];
-
-  tabs.innerHTML = tabDefinitions
-    .map(([key, label]) => `<button class="tab-btn" data-tab="${escapeHtml(key)}">${escapeHtml(label)}</button>`)
+function buildForecastTable(forecastRows) {
+  const body = forecastRows
+    .map(
+      (row) => `
+      <tr>
+        <td>${row.year}</td>
+        <td>${formatMoney(row.revenue)}</td>
+        <td>${formatMoney(row.ebit)}</td>
+        <td>${formatMoney(row.nopat)}</td>
+        <td>${formatMoney(row.depreciation)}</td>
+        <td>${formatMoney(row.capex)}</td>
+        <td>${formatMoney(row.delta_nwc)}</td>
+        <td>${formatMoney(row.fcff)}</td>
+        <td>${formatMoney(row.pv_fcff)}</td>
+      </tr>
+    `
+    )
     .join("");
 
-  tabs.style.display = "flex";
+  forecastEl.innerHTML = `
+    <h2>5-Year FCFF Forecast</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Year</th><th>Revenue</th><th>EBIT</th><th>NOPAT</th><th>Depreciation</th>
+            <th>Capex</th><th>ΔNWC</th><th>FCFF</th><th>PV(FCFF)</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+}
 
-  tabs.querySelectorAll(".tab-btn").forEach((tabButton) => {
-    tabButton.addEventListener("click", () => activateTab(tabButton.dataset.tab));
+function renderForecastChart(forecastRows) {
+  const labels = forecastRows.map((row) => `Year ${row.year}`);
+  const revenue = forecastRows.map((row) => row.revenue);
+  const ebit = forecastRows.map((row) => row.ebit);
+  const fcff = forecastRows.map((row) => row.fcff);
+
+  const ctx = document.getElementById("forecast-chart");
+  if (forecastChart) forecastChart.destroy();
+
+  forecastChart = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: "bar",
+          label: "Revenue",
+          data: revenue,
+          backgroundColor: "rgba(94, 161, 255, 0.25)",
+          borderColor: "#5ea1ff",
+          borderWidth: 1,
+          yAxisID: "y",
+        },
+        {
+          type: "line",
+          label: "EBIT",
+          data: ebit,
+          borderColor: "#27c8b8",
+          backgroundColor: "rgba(39, 200, 184, 0.2)",
+          tension: 0.3,
+          yAxisID: "y",
+        },
+        {
+          type: "line",
+          label: "FCFF",
+          data: fcff,
+          borderColor: "#f0a93b",
+          backgroundColor: "rgba(240, 169, 59, 0.2)",
+          borderDash: [6, 4],
+          tension: 0.3,
+          yAxisID: "y",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          labels: { color: "#d7e6ff" },
+        },
+      },
+      scales: {
+        x: { ticks: { color: "#b8caee" }, grid: { color: "rgba(255,255,255,0.05)" } },
+        y: {
+          ticks: {
+            color: "#b8caee",
+            callback: (value) => `$${formatNumber(value, 0)}`,
+          },
+          grid: { color: "rgba(255,255,255,0.08)" },
+        },
+      },
+    },
   });
 }
 
-function renderFinancialTables(data) {
-  const allEmpty = SECTIONS.every(([key]) => !Object.keys(data[key] || {}).length);
+function colorForCell(value, min, max) {
+  if (value === null || value === undefined) return "background: #3a2130;";
+  const normalized = max === min ? 0.5 : (value - min) / (max - min);
+  const hue = Math.round(15 + normalized * 120);
+  return `background: hsl(${hue}, 60%, 24%);`;
+}
 
-  if (allEmpty) {
-    tabs.style.display = "none";
-    output.innerHTML = `<div class="error">No tabular financial data returned.</div>`;
-    return;
-  }
+function buildSensitivityTable(sensitivity) {
+  const { wacc_axis: waccAxis, growth_axis: growthAxis, enterprise_value_matrix: matrix } = sensitivity;
+  const values = matrix.flat().filter((value) => value !== null);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
 
-  const fullViewHtml = SECTIONS
-    .map(([key, title]) => buildTable(data[key], key))
+  const headerCells = ["<th>g \\ WACC</th>"]
+    .concat(waccAxis.map((wacc) => `<th>${formatPercent(wacc)}</th>`))
     .join("");
 
-  const singleViews = SECTIONS
-    .map(([key, title]) => {
-      const body = buildTable(data[key], key);
-      return `<section class="statement" data-tab="${escapeHtml(key)}">${body}</section>`;
+  const rows = growthAxis
+    .map((g, rowIndex) => {
+      const cells = matrix[rowIndex]
+        .map((value) => `<td style="${colorForCell(value, min, max)}">${value === null ? "-" : formatMoney(value)}</td>`)
+        .join("");
+      return `<tr><td>${formatPercent(g)}</td>${cells}</tr>`;
     })
     .join("");
 
-  output.innerHTML = `
-    <section class="statement" data-tab="all">${fullViewHtml}</section>
-    ${singleViews}
+  sensitivityEl.innerHTML = `
+    <h2>Sensitivity Analysis (Enterprise Value)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${headerCells}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function buildStatementTable(title, statementData) {
+  const rows = Object.keys(statementData || {});
+  if (!rows.length) return `<div class="empty">No ${title} data available.</div>`;
+
+  const columnSet = new Set();
+  rows.forEach((rowName) => Object.keys(statementData[rowName] || {}).forEach((c) => columnSet.add(c)));
+  const columns = [...columnSet].sort((a, b) => (Date.parse(b) || 0) - (Date.parse(a) || 0));
+
+  const header = ["<th>Breakdown</th>"].concat(columns.map((col) => `<th>${col}</th>`)).join("");
+  const body = rows
+    .map((rowName) => {
+      const cells = columns.map((col) => `<td>${formatNumber(statementData[rowName][col], 0)}</td>`).join("");
+      return `<tr><td>${rowName}</td>${cells}</tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${header}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function buildStatementTabs(sourceData) {
+  const tabButtons = STATEMENT_TABS
+    .map(([key, label], idx) => `<button class="tab-btn ${idx === 0 ? "active" : ""}" data-tab="${key}">${label}</button>`)
+    .join("");
+
+  const tabPanels = STATEMENT_TABS
+    .map(([key, label], idx) => `
+      <section class="statement-panel ${idx === 0 ? "active" : ""}" data-tab="${key}">
+        <h3>${label}</h3>
+        ${buildStatementTable(label, sourceData[key])}
+      </section>
+    `)
+    .join("");
+
+  statementsEl.innerHTML = `
+    <h2>Financial Statements</h2>
+    <div class="tabs">${tabButtons}</div>
+    ${tabPanels}
   `;
 
-  renderTabs();
-  activateTab("all");
+  statementsEl.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      statementsEl.querySelectorAll(".tab-btn").forEach((item) => item.classList.toggle("active", item.dataset.tab === tab));
+      statementsEl.querySelectorAll(".statement-panel").forEach((panel) => panel.classList.toggle("active", panel.dataset.tab === tab));
+    });
+  });
 }
 
-function resetResults() {
-  tabs.style.display = "none";
-  tabs.innerHTML = "";
-  output.innerHTML = `<div class="empty-state">Loading...</div>`;
-}
-
-btn.addEventListener("click", async () => {
-  const query = input.value.trim();
-
+runBtn.addEventListener("click", async () => {
+  const query = tickerInput.value.trim().toUpperCase();
   if (!query) {
-    alert("Enter ticker");
+    setStatus("Please enter a ticker before running the model.", true);
     return;
   }
 
-  resetResults();
-  queryChip.style.display = "none";
+  setStatus("Running DCF model...");
+  resetPanels();
 
   try {
-    const res = await fetch(
-      `https://automated-dcf.onrender.com/fetch-data?query=${encodeURIComponent(query)}`
-    );
+    const res = await fetch("/dcf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, assumptions: collectAssumptions() }),
+    });
 
     const data = await res.json();
-
-    if (data.error) {
-      output.innerHTML = `<div class="error">❌ ${escapeHtml(data.error)}</div>`;
-      tabs.style.display = "none";
-    } else {
-      queryChip.textContent = `Showing data for: ${query}`;
-      queryChip.style.display = "inline-flex";
-      renderFinancialTables(data);
+    if (!res.ok) {
+      setStatus(`Unable to run DCF: ${data.error || `HTTP ${res.status}`}`, true);
+      return;
     }
-  } catch (err) {
-    output.innerHTML = `<div class="error">❌ Cannot reach backend</div>`;
-    tabs.style.display = "none";
-    console.error(err);
+
+    showPanels();
+    renderDefaultsChip(data.defaulted_fields, data.assumptions);
+    buildSummary(data.query, data.assumptions, data.valuation);
+    renderForecastChart(data.forecast || []);
+    buildForecastTable(data.forecast || []);
+    buildSensitivityTable(data.sensitivity);
+    buildStatementTabs(data.source_data || {});
+
+    const cached = data.from_cache ? "(loaded from local cache)" : "(freshly fetched)";
+    setStatus(`Model complete for ${data.query} ${cached}. Last data refresh: ${new Date(data.last_updated).toLocaleString()}`);
+  } catch (error) {
+    setStatus("Failed to reach backend service. Please try again.", true);
+    console.error(error);
   }
 });
