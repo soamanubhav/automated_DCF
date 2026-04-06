@@ -58,3 +58,21 @@ Response includes:
 ### `GET /fetch-data?query=AAPL`
 
 Returns statement data and cache metadata (`from_cache`, `last_updated`).
+
+
+### `POST /company-financials`
+
+Store company financials directly in JSON format:
+
+```json
+{
+  "query": "AAPL",
+  "balance_sheet": {"Total Assets": {"2024-09-30": 1000}},
+  "income_statement": {"Total Revenue": {"2024-09-30": 500}},
+  "cash_flow_statement": {"Operating Cash Flow": {"2024-09-30": 120}}
+}
+```
+
+### `GET /company-financials?query=AAPL`
+
+Retrieve previously stored JSON financials for a company.
