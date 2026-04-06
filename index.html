@@ -4,85 +4,28 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Company Data Fetcher</title>
-
-  <style>
-    body {
-      font-family: Arial;
-      background: #f6f7fb;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-
-    .card {
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      width: 400px;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-    }
-
-    input, button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-    }
-
-    pre {
-      margin-top: 15px;
-      max-height: 300px;
-      overflow: auto;
-      background: #eee;
-      padding: 10px;
-      font-size: 12px;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-  <div class="card">
-    <h3>Financial Data Fetcher</h3>
+  <div class="page">
+    <div class="card">
+      <h3 class="title">Financial Data Fetcher</h3>
+      <p class="subtitle">Fetch and explore Income Statement, Balance Sheet, and Cash Flow in separate tabs.</p>
 
-    <input id="ticker" placeholder="RELIANCE.NS / AAPL" />
-    <button id="fetch-btn">Fetch Data</button>
+      <div class="controls">
+        <input id="ticker" placeholder="Try RELIANCE.NS / AAPL / MSFT" />
+        <button id="fetch-btn">Fetch Data</button>
+      </div>
 
-    <pre id="output"></pre>
+      <div id="query-chip" class="query-chip"></div>
+      <div id="tabs" class="tabs"></div>
+      <div id="output" class="output">
+        <div class="empty-state">Enter a ticker and click <strong>Fetch Data</strong> to view statements.</div>
+      </div>
+    </div>
   </div>
 
-  <script>
-    const btn = document.getElementById("fetch-btn");
-    const input = document.getElementById("ticker");
-    const output = document.getElementById("output");
-
-    btn.addEventListener("click", async () => {
-      const query = input.value.trim();
-
-      if (!query) {
-        alert("Enter ticker");
-        return;
-      }
-
-      output.textContent = "Loading...";
-
-      try {
-        const res = await fetch(
-          `https://automated-dcf.onrender.com/fetch-data?query=${encodeURIComponent(query)}`
-        );
-
-        const data = await res.json();
-
-        if (data.error) {
-          output.textContent = "❌ " + data.error;
-        } else {
-          output.textContent = JSON.stringify(data, null, 2);
-        }
-
-      } catch (err) {
-        output.textContent = "❌ Cannot reach backend";
-        console.error(err);
-      }
-    });
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
