@@ -449,7 +449,11 @@ def _get_company_financials(ticker_symbol: str) -> dict[str, Any]:
     return fresh_data
 
 
-def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]) -> dict[str, Any]:
+def _compute_dcf(
+    company_data: dict[str, Any],
+    assumption_inputs: dict[str, Any],
+    manual_shares_outstanding: float | None = None,
+) -> dict[str, Any]:
     ticker_symbol = company_data["ticker"]
     balance_sheet = company_data["balance_sheet"]
     income_statement = company_data["income_statement"]
@@ -589,7 +593,15 @@ def _compute_dcf(company_data: dict[str, Any], assumption_inputs: dict[str, Any]
 
     equity_value = enterprise_value + cash - debt
 
-    shares = float(info.get("sharesOutstanding") or 0)
+    ordinary_shares_series = _extract_series(
+        balance_sheet,
+        ["Ordinary Shares Number", "Share Issued", "Common Stock Shares Outstanding"],
+    )
+    shares = float(ordinary_shares_series.iloc[-1]) if not ordinary_shares_series.empty else 0.0
+    if shares <= 0:
+        shares = float(info.get("sharesOutstanding") or 0)
+    if manual_shares_outstanding is not None and manual_shares_outstanding > 0:
+        shares = manual_shares_outstanding
     if shares <= 0:
         shares = 1.0
 
@@ -714,9 +726,13 @@ def dcf_valuation():
     if not isinstance(assumptions, dict):
         return jsonify({"error": "Assumptions must be a JSON object."}), 400
 
+    manual_shares = _safe_float(payload.get("manual_shares_outstanding"))
+    if manual_shares is not None and manual_shares <= 0:
+        return jsonify({"error": "manual_shares_outstanding must be a positive number."}), 400
+
     try:
         company_data = _get_company_financials(query)
-        result = _compute_dcf(company_data, assumptions)
+        result = _compute_dcf(company_data, assumptions, manual_shares_outstanding=manual_shares)
         result["from_cache"] = company_data["from_cache"]
         result["last_updated"] = company_data["last_updated"]
     except InvalidTickerError as exc:

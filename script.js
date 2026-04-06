@@ -2,6 +2,7 @@ const runBtn = document.getElementById("run-btn");
 const tickerInput = document.getElementById("ticker");
 const statusEl = document.getElementById("status");
 const defaultsChip = document.getElementById("defaults-chip");
+const manualSharesInput = document.getElementById("manual_shares_outstanding");
 
 const summaryEl = document.getElementById("summary");
 const chartsEl = document.getElementById("charts");
@@ -60,6 +61,14 @@ function collectAssumptions() {
     if (value !== "") assumptions[field] = Number(value);
   });
   return assumptions;
+}
+
+function collectManualSharesOutstanding() {
+  if (!manualSharesInput) return null;
+  const rawValue = manualSharesInput.value.trim();
+  if (!rawValue) return null;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function showPanels() {
@@ -123,7 +132,7 @@ function buildSummary(query, assumptions, valuation) {
           <tr><td>Cash</td><td>${formatMoney(valuation.cash)}</td></tr>
           <tr><td>Debt</td><td>${formatMoney(valuation.debt)}</td></tr>
           <tr><td>Equity Value</td><td>${formatMoney(valuation.equity_value)}</td></tr>
-          <tr><td>Shares Outstanding</td><td>${formatNumber(valuation.shares_outstanding, 0)}</td></tr>
+          <tr><td>Ordinary Shares Number</td><td>${formatNumber(valuation.shares_outstanding, 0)}</td></tr>
           <tr><td>Fair Value per Share</td><td>${formatMoney(valuation.intrinsic_price_per_share)}</td></tr>
         </tbody>
       </table>
@@ -338,10 +347,16 @@ runBtn.addEventListener("click", async () => {
   resetPanels();
 
   try {
+    const manualSharesOutstanding = collectManualSharesOutstanding();
+    const payload = { query, assumptions: collectAssumptions() };
+    if (manualSharesOutstanding !== null) {
+      payload.manual_shares_outstanding = manualSharesOutstanding;
+    }
+
     const res = await fetch(apiUrl("/dcf"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, assumptions: collectAssumptions() }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
