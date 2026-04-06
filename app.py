@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from typing import Any
 
@@ -9,20 +10,27 @@ import yfinance as yf
 app = Flask(__name__)
 
 
+def _sanitize_json_value(value: Any) -> Any:
+    """Convert non-JSON-safe numeric values (NaN/inf) to None recursively."""
+    if isinstance(value, dict):
+        return {str(k): _sanitize_json_value(v) for k, v in value.items()}
+
+    if isinstance(value, list):
+        return [_sanitize_json_value(item) for item in value]
+
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return None
+
+    return value
+
+
 def _frame_to_dict(frame: Any) -> dict[str, dict[str, Any]]:
     """Convert a yfinance DataFrame to a JSON-safe nested dictionary."""
     if frame is None or getattr(frame, "empty", True):
         return {}
 
-    safe_frame = frame.where(frame.notna(), None)
-    converted: dict[str, dict[str, Any]] = {}
-
-    for row_name, row_values in safe_frame.to_dict(orient="index").items():
-        converted[str(row_name)] = {
-            str(column): value for column, value in row_values.items()
-        }
-
-    return converted
+    raw_data = frame.to_dict(orient="index")
+    return _sanitize_json_value(raw_data)
 
 
 @app.get("/")
