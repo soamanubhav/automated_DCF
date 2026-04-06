@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Company Financial Fetcher</title>
+    <style>
+      :root {
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #f6f7fb;
+      }
+
+      .card {
+        width: min(92vw, 760px);
+        background: #fff;
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      }
+
+      .note {
+        margin-top: 0;
+        color: #475467;
+        font-size: 0.9rem;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.75rem;
+      }
+
+      label {
+        display: block;
+        font-size: 0.95rem;
+        margin-bottom: 0.5rem;
+      }
+
+      input {
+        width: 100%;
+        padding: 0.7rem 0.8rem;
+        font-size: 1rem;
+        border: 1px solid #ccd2dd;
+        border-radius: 0.5rem;
+        box-sizing: border-box;
+      }
+
+      button {
+        min-width: 120px;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        border: 0;
+        border-radius: 0.5rem;
+        background: #1f6feb;
+        color: #fff;
+        cursor: pointer;
+      }
+
+      button:hover:enabled {
+        background: #175bc1;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+
+      .status {
+        margin: 1rem 0;
+        font-size: 0.9rem;
+      }
+
+      pre {
+        margin: 0;
+        max-height: 420px;
+        overflow: auto;
+        background: #0b1020;
+        color: #e4e8f5;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <p class="note">
+        Run the Python server first, then open this app at
+        <code>http://127.0.0.1:5000</code>.
+      </p>
+      <label for="company-input">Company Name / Ticker</label>
+      <form id="fetch-form" class="controls">
+        <input
+          id="company-input"
+          type="text"
+          placeholder="e.g., Apple or AAPL"
+          aria-label="Company Name or Ticker"
+        />
+        <button id="fetch-btn" type="button">Fetch Data</button>
+      </form>
+      <p id="status" class="status"></p>
+      <pre id="output" hidden></pre>
+    </main>
+
+    <script>
+      const form = document.getElementById('fetch-form');
+      const input = document.getElementById('company-input');
+      const btn = document.getElementById('fetch-btn');
+      const status = document.getElementById('status');
+      const output = document.getElementById('output');
+
+      const defaultApiBase =
+        window.location.hostname.includes('onrender.com')
+          ? window.location.origin
+          : 'https://automated-dcf.onrender.com';
+      const apiBaseUrl = (window.API_BASE_URL || defaultApiBase).replace(/\/$/, '');
+
+      const setStatus = (msg, isError = false) => {
+        status.textContent = msg;
+        status.style.color = isError ? '#b42318' : '#344054';
+      };
+
+      async function fetchData() {
+        const query = input.value.trim();
+
+        if (!query) {
+          setStatus('Please enter a company name or ticker first.', true);
+          output.hidden = true;
+          return;
+        }
+
+        btn.disabled = true;
+        setStatus(`Fetching financial statements for "${query}"...`);
+        output.hidden = true;
+
+        try {
+          const res = await fetch(`${apiBaseUrl}/fetch-data`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query }),
+          });
+
+          const contentType = res.headers.get('content-type') || '';
+          if (!contentType.includes('application/json')) {
+            const text = await res.text();
+            throw new Error(
+              `Server returned non-JSON response (HTTP ${res.status}). ${text.slice(0, 120)}`
+            );
+          }
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            throw new Error(data.error || `HTTP ${res.status}`);
+          }
+
+          output.textContent = JSON.stringify(data, null, 2);
+          output.hidden = false;
+          setStatus('Data fetched successfully.');
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes('Failed to fetch')) {
+            setStatus(
+              `Cannot reach backend at ${apiBaseUrl}/fetch-data. If local, start Flask. If deployed, verify CORS and API URL.`,
+              true
+            );
+          } else {
+            setStatus(`Failed to fetch data: ${message}`, true);
+          }
+          output.hidden = true;
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      btn.addEventListener('click', fetchData);
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          fetchData();
+        }
+      });
+
+      if (form) {
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          fetchData();
+        });
+      }
+
+      if (window.location.protocol === 'file:') {
+        setStatus(
+          `This page must be opened from a server, not as a local file. Expected API base: ${apiBaseUrl}.`,
+          true
+        );
+      }
+    </script>
+  </body>
+</html>
