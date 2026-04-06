@@ -99,8 +99,9 @@ If you do not want to use `render.yaml`, set this manually in Render:
 If your site is hosted on another domain, call the deployed endpoint directly:
 
 - API URL: `https://automated-dcf.onrender.com/fetch-data`
-- Method: `POST`
-- JSON body: `{ "query": "AAPL" }`
+- Method: `GET`
+- Query param: `?query=AAPL`
+- (POST with JSON body is also supported)
 
 ### Example frontend snippet
 
@@ -112,11 +113,8 @@ If your site is hosted on another domain, call the deployed endpoint directly:
 <script>
   document.getElementById('fetch-data').addEventListener('click', async () => {
     const query = document.getElementById('ticker').value.trim();
-    const res = await fetch('https://automated-dcf.onrender.com/fetch-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    });
+    const url = `https://automated-dcf.onrender.com/fetch-data?query=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { method: 'GET' });
 
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {

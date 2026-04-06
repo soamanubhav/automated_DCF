@@ -17,7 +17,7 @@ cors_origins = (
     if cors_origins_env == "*"
     else [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
 )
-CORS(app, resources={r"/fetch-data": {"origins": cors_origins}})
+CORS(app, resources={r"/*": {"origins": cors_origins}}, methods=["GET", "POST", "OPTIONS"])
 
 
 def _sanitize_json_value(value: Any) -> Any:
@@ -62,10 +62,13 @@ def index() -> str:
     return render_template("index.html")
 
 
-@app.post("/fetch-data")
+@app.route("/fetch-data", methods=["GET", "POST"])
 def fetch_data():
-    payload = request.get_json(silent=True) or {}
-    query = str(payload.get("query", "")).strip()
+    if request.method == "GET":
+        query = str(request.args.get("query", "")).strip()
+    else:
+        payload = request.get_json(silent=True) or {}
+        query = str(payload.get("query", "")).strip()
 
     if not query:
         return jsonify({"error": "Missing company name or ticker."}), 400
