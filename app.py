@@ -5,21 +5,31 @@ import os
 from typing import Any
 
 from flask import Flask, jsonify, render_template, request
+import pandas as pd
 import yfinance as yf
 
 app = Flask(__name__)
 
 
 def _sanitize_json_value(value: Any) -> Any:
-    """Convert non-JSON-safe numeric values (NaN/inf) to None recursively."""
+    """Recursively convert values into JSON-safe primitives."""
     if isinstance(value, dict):
         return {str(k): _sanitize_json_value(v) for k, v in value.items()}
 
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple, set)):
         return [_sanitize_json_value(item) for item in value]
+
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
 
     if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
         return None
+
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
 
     return value
 
@@ -29,7 +39,12 @@ def _frame_to_dict(frame: Any) -> dict[str, dict[str, Any]]:
     if frame is None or getattr(frame, "empty", True):
         return {}
 
-    raw_data = frame.to_dict(orient="index")
+    safe_frame = frame.copy()
+    safe_frame.index = safe_frame.index.map(str)
+    safe_frame.columns = safe_frame.columns.map(str)
+    safe_frame = safe_frame.applymap(_sanitize_json_value)
+
+    raw_data = safe_frame.to_dict(orient="index")
     return _sanitize_json_value(raw_data)
 
 
